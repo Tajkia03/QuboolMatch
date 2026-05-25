@@ -108,4 +108,4 @@ cd frontend && npm install && npm run dev
 
 ---
 
-**Made by students | TypeScript (60%) + Python (39%) | Full-stack matching application**
+**TypeScript (60%) + Python (39%) | Full-stack matching application**
