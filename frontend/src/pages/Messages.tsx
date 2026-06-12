@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { API_BASE_URL, getAccessToken, messageApi } from '../services/api';
+import { API_BASE_URL, getAccessToken, messageApi, trustSafetyApi } from '../services/api';
 
 type ChatUser = {
   id: string;
@@ -8,6 +8,10 @@ type ChatUser = {
   age: number;
   religion: string | null;
   profile_picture: string | null;
+  verification_status?: string | null;
+  matching_percentage?: number | null;
+  nid_verified?: boolean;
+  photo_verified?: boolean;
 };
 
 type Message = {
@@ -24,6 +28,11 @@ type Conversation = {
   user: ChatUser;
   last_message: Message;
   unread_count: number;
+  block_status?: {
+    blocked_by_me: boolean;
+    blocked_me: boolean;
+    blocked: boolean;
+  };
 };
 
 const getCurrentUserIdFromToken = (): string | null => {
@@ -62,6 +71,67 @@ const Messages: React.FC = () => {
     () => conversations.find((conv) => conv.user.id === activeUserId) ?? null,
     [conversations, activeUserId]
   );
+
+  const isBlockedByMe = Boolean(activeConversation?.block_status?.blocked_by_me);
+  const isBlockedByThem = Boolean(activeConversation?.block_status?.blocked_me);
+  const isBlockedEitherWay = isBlockedByMe || isBlockedByThem;
+
+  const renderVerificationBadges = (user: ChatUser | null) => {
+    if (!user || (!user.nid_verified && !user.photo_verified)) {
+      return null;
+    }
+
+    return (
+      <div className="flex flex-wrap gap-2 mt-1">
+        {user.nid_verified && (
+          <span
+            className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium px-2 py-0.5"
+            title="NID verified by our team"
+          >
+            NID Verified
+          </span>
+        )}
+        {user.photo_verified && (
+          <span
+            className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5"
+            title="Photo verified via NID-to-photo match"
+          >
+            Photo Verified
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const handleReportActive = async () => {
+    if (!activeConversation) return;
+    const reason = window.prompt('Why are you reporting this user? (e.g., harassment, scam, spam)');
+    if (!reason || !reason.trim()) return;
+    const details = window.prompt('Any additional details? (optional)');
+    try {
+      await trustSafetyApi.reportUser(activeConversation.user.id, reason.trim(), details?.trim() || undefined, 'messages');
+      alert('Report submitted. Thank you for helping keep the community safe.');
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : 'Failed to submit report';
+      alert(msg);
+    }
+  };
+
+  const handleBlockActive = async () => {
+    if (!activeConversation) return;
+    if (!window.confirm(`Block ${activeConversation.user.name}? You will no longer see each other.`)) return;
+    try {
+      await trustSafetyApi.blockUser(activeConversation.user.id);
+      await loadConversations();
+      if (activeUserId) {
+        await loadThread(activeUserId);
+      }
+      alert(`${activeConversation.user.name} has been blocked.`);
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : 'Failed to block user';
+      alert(msg);
+    }
+  };
 
   const scrollToBottom = () => {
     endOfMessagesRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -191,6 +261,10 @@ const Messages: React.FC = () => {
 
   const sendMessage = async () => {
     if (!activeUserId || !draft.trim()) return;
+    if (isBlockedEitherWay) {
+      setError(isBlockedByThem ? 'This user blocked you. You can view the conversation but cannot send messages.' : 'Unblock this user before sending messages.');
+      return;
+    }
 
     try {
       setSending(true);
@@ -263,6 +337,11 @@ const Messages: React.FC = () => {
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-gray-800 truncate">{conv.user.name}</div>
                           <div className="text-xs text-gray-500 truncate">{conv.last_message.content}</div>
+                          {conv.block_status?.blocked_by_me && (
+                            <div className="mt-1 inline-flex rounded-full bg-red-100 text-red-700 text-[11px] font-medium px-2 py-0.5">
+                              Blocked
+                            </div>
+                          )}
                         </div>
                         {conv.unread_count > 0 && (
                           <span className="bg-red-600 text-white text-xs font-bold rounded-full px-2 py-0.5">
@@ -279,9 +358,38 @@ const Messages: React.FC = () => {
             <div className="md:col-span-2 border border-gray-200 rounded-lg overflow-hidden flex flex-col">
               {activeUserId ? (
                 <>
-                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                    <div className="font-semibold text-gray-800">{activeConversation?.user.name || activeUserName}</div>
-                    <div className="text-xs text-gray-500">{activeConversation?.user.religion ?? 'Matched user'}</div>
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-gray-800">{activeConversation?.user.name || activeUserName}</div>
+                      <div className="text-xs text-gray-500">{activeConversation?.user.religion ?? 'Matched user'}</div>
+                      {renderVerificationBadges(activeConversation?.user ?? null)}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {isBlockedByMe && (
+                          <div className="inline-flex rounded-full bg-red-100 text-red-700 text-xs font-medium px-2 py-1">
+                            Blocked by you
+                          </div>
+                        )}
+                        {isBlockedByThem && (
+                          <div className="inline-flex rounded-full bg-amber-100 text-amber-800 text-xs font-medium px-2 py-1">
+                            This user blocked you
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleReportActive}
+                        className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md"
+                      >
+                        Report
+                      </button>
+                      <button
+                        onClick={handleBlockActive}
+                        className="px-3 py-1.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-md"
+                      >
+                        {isBlockedByMe ? 'Blocked' : 'Block'}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex-1 max-h-[390px] overflow-y-auto px-4 py-4 bg-white space-y-3">
@@ -312,6 +420,33 @@ const Messages: React.FC = () => {
                   </div>
 
                   <div className="border-t border-gray-200 p-3 bg-gray-50">
+                    {isBlockedByMe && (
+                      <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 flex items-center justify-between gap-3">
+                        <span>You blocked this person. Unblock them to resume chatting.</span>
+                        <button
+                          onClick={async () => {
+                            if (!activeConversation) return;
+                            try {
+                              await trustSafetyApi.unblockUser(activeConversation.user.id);
+                              await loadConversations();
+                              if (activeUserId) {
+                                await loadThread(activeUserId);
+                              }
+                            } catch (err: any) {
+                              alert(err instanceof Error ? err.message : 'Failed to unblock user');
+                            }
+                          }}
+                          className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-red-700 border border-red-200 hover:bg-red-100"
+                        >
+                          Unblock
+                        </button>
+                      </div>
+                    )}
+                    {isBlockedByThem && (
+                      <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        This user blocked you. You can still view the conversation for transparency, but you cannot send new messages.
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -325,11 +460,12 @@ const Messages: React.FC = () => {
                           }
                         }}
                         placeholder="Type a message..."
-                        className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        disabled={isBlockedEitherWay}
+                        className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-100 disabled:text-gray-500"
                       />
                       <button
                         onClick={() => void sendMessage()}
-                        disabled={sending || !draft.trim()}
+                        disabled={sending || !draft.trim() || isBlockedEitherWay}
                         className="rounded-md bg-indigo-600 text-white px-4 py-2 text-sm font-medium disabled:opacity-60"
                       >
                         {sending ? 'Sending...' : 'Send'}

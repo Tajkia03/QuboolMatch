@@ -7,6 +7,7 @@ from repositories.interest_repository.interest_repository import InterestReposit
 from repositories.notification_repository.notification_repository import NotificationRepository
 from repositories.user_repository.user_repository import UserRepository
 from repositories.profile_repository.profile_repository import ProfileRepository
+from repositories.block_repository import BlockRepository
 from shared.token import get_current_user
 from models.user.user import User
 from typing import Optional
@@ -36,6 +37,9 @@ async def send_interest(
         recipient = UserRepository.get_by_id(db, params.to_user_id)
         if not recipient:
             raise HTTPException(status_code=404, detail="User not found")
+
+        if BlockRepository.is_blocked_between(db, current_user.id, params.to_user_id):
+            raise HTTPException(status_code=403, detail="You cannot send interest to this user")
         
         # Cannot send interest to yourself
         if current_user.id == params.to_user_id:
@@ -110,10 +114,13 @@ async def get_received_interests(
     """Get all interests received by the current user."""
     try:
         interests = InterestRepository.get_received(db, current_user.id)
+        blocked_ids = BlockRepository.get_blocked_user_ids(db, current_user.id)
         
         # Enrich with sender information
         result = []
         for interest in interests:
+            if interest.from_user_id in blocked_ids:
+                continue
             sender = UserRepository.get_by_id(db, interest.from_user_id)
             sender_profile = ProfileRepository.get_by_user_id(db, interest.from_user_id)
             
@@ -152,10 +159,13 @@ async def get_sent_interests(
     """Get all interests sent by the current user."""
     try:
         interests = InterestRepository.get_sent(db, current_user.id)
+        blocked_ids = BlockRepository.get_blocked_user_ids(db, current_user.id)
         
         # Enrich with recipient information
         result = []
         for interest in interests:
+            if interest.to_user_id in blocked_ids:
+                continue
             recipient = UserRepository.get_by_id(db, interest.to_user_id)
             recipient_profile = ProfileRepository.get_by_user_id(db, interest.to_user_id)
             
@@ -368,6 +378,7 @@ async def get_matches(
         print(f"[MATCHES] Fetching matches for user_id={current_user.id}")
         matches = InterestRepository.get_all_accepted(db, current_user.id)
         print(f"[MATCHES] Found {len(matches)} accepted interests")
+        blocked_ids = BlockRepository.get_blocked_user_ids(db, current_user.id)
         
         # Enrich with other user's information
         result = []
@@ -377,6 +388,9 @@ async def get_matches(
                 interest.to_user_id if interest.from_user_id == current_user.id
                 else interest.from_user_id
             )
+
+            if other_user_id in blocked_ids:
+                continue
             
             other_user = UserRepository.get_by_id(db, other_user_id)
             other_profile = ProfileRepository.get_by_user_id(db, other_user_id)
@@ -396,12 +410,19 @@ async def get_matches(
                     print(f"Error encoding profile picture: {e}")
             
             match_dict = interest.to_dict()
+            nid_verified = other_user.verification_status == "verified"
+            photo_verified = other_user.matching_percentage is not None and other_user.matching_percentage >= 70
+
             match_dict["matched_user"] = {
                 "id": other_user.id,
                 "name": other_user.name,
                 "age": other_user.age,
                 "religion": other_user.religion,
-                "profile_picture": profile_picture_base64
+                "profile_picture": profile_picture_base64,
+                "verification_status": other_user.verification_status,
+                "matching_percentage": other_user.matching_percentage,
+                "nid_verified": nid_verified,
+                "photo_verified": photo_verified
             }
             result.append(match_dict)
         

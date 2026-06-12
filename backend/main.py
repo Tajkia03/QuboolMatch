@@ -8,7 +8,10 @@ from controllers.profile_controller import profile_controller
 from controllers.interest_controller import interest_controller
 from controllers.notification_controller import notification_controller
 from controllers.message_controller import message_controller
+from controllers import trust_safety_controller
 from models.message.message import Message
+from models.block import Block
+from models.report import Report
 from create_db import create_database
 from middlewares import cors_middleware
 from middlewares import static_middleware
@@ -33,3 +36,4 @@ app.include_router(profile_controller.router, prefix="/api", tags=["profile"])
 app.include_router(interest_controller.router, prefix="/api", tags=["interests"])
 app.include_router(notification_controller.router, prefix="/api", tags=["notifications"])
 app.include_router(message_controller.router, prefix="/api", tags=["messages"])
+app.include_router(trust_safety_controller.router, prefix="/api", tags=["trust-safety"])

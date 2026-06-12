@@ -74,6 +74,89 @@ interface ProfileData {
   additionalComments: string;
 }
 
+interface CompletionSection {
+  completed: number;
+  total: number;
+  percent: number;
+}
+
+interface CompletionResult {
+  overallPercent: number;
+  sections: {
+    personal: CompletionSection;
+    health: CompletionSection;
+    preferences: CompletionSection;
+  };
+}
+
+const isFilled = (value: unknown): boolean => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value === "boolean") return value === true;
+  if (Array.isArray(value)) return value.length > 0;
+  return false;
+};
+
+const getSectionCompletion = (fields: unknown[]): CompletionSection => {
+  const total = fields.length;
+  const completed = fields.filter(isFilled).length;
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+  return { completed, total, percent };
+};
+
+const getProfileCompletion = (profile: ProfileData): CompletionResult => {
+  const personalFields = [
+    profile.name,
+    profile.age,
+    profile.gender,
+    profile.location,
+    profile.religion,
+    profile.maritalStatus,
+    profile.academicBackground,
+    profile.profession,
+    profile.guardianName,
+    profile.guardianRelation,
+    profile.guardianContactNumber
+  ];
+
+  const healthFields = [
+    profile.overallHealthStatus,
+    profile.medicalHistory,
+    profile.longTermCondition,
+    profile.longTermConditionDescription,
+    profile.bloodGroup,
+    profile.geneticConditions,
+    profile.fertilityAwareness,
+    profile.disability,
+    profile.disabilityDescription
+  ];
+
+  const preferenceFields = [
+    profile.preferredAgeMin,
+    profile.preferredAgeMax,
+    profile.preferredReligion,
+    profile.preferredLocation
+  ];
+
+  const personal = getSectionCompletion(personalFields);
+  const health = getSectionCompletion(healthFields);
+  const preferences = getSectionCompletion(preferenceFields);
+
+  const totalCompleted = personal.completed + health.completed + preferences.completed;
+  const totalFields = personal.total + health.total + preferences.total;
+  const overallPercent = totalFields > 0 ? Math.round((totalCompleted / totalFields) * 100) : 0;
+
+  return {
+    overallPercent,
+    sections: {
+      personal,
+      health,
+      preferences
+    }
+  };
+};
+
 const ProfilePage: React.FC = () => {
   const [introVideoFile, setIntroVideoFile] = useState<File | null>(null);
   const [medicalDocumentFile, setMedicalDocumentFile] = useState<File | null>(null);
@@ -145,6 +228,11 @@ const ProfilePage: React.FC = () => {
     necessaryPreferences: [],
     additionalComments: ""
   });
+
+  const completion = getProfileCompletion(profile);
+  const personalRemaining = completion.sections.personal.total - completion.sections.personal.completed;
+  const healthRemaining = completion.sections.health.total - completion.sections.health.completed;
+  const preferencesRemaining = completion.sections.preferences.total - completion.sections.preferences.completed;
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> | { target: { name: string; value: any; type?: string; checked?: boolean } }) => {
@@ -296,6 +384,10 @@ const ProfilePage: React.FC = () => {
 
       // Transform the frontend profile data to match the backend API format
       const profileData = {
+        name: profile.name,
+        age: profile.age ? parseInt(profile.age) : null,
+        gender: profile.gender,
+        religion: profile.religion,
         location: profile.location,
         guardian_name: profile.guardianName,
         guardian_relation: profile.guardianRelation,
@@ -501,6 +593,32 @@ const ProfilePage: React.FC = () => {
     <div className="min-h-screen bg-gray-100 py-8">
       <div className="container mx-auto max-w-4xl bg-white shadow-lg rounded-lg p-6">
         <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">Complete Your Profile</h1>
+        <div className="mb-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">Profile Completion</h2>
+            <span className="text-xs font-medium text-gray-500">{completion.overallPercent}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+            <div
+              className="bg-emerald-500 h-2 rounded-full transition-all"
+              style={{ width: `${completion.overallPercent}%` }}
+            />
+          </div>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <div className="flex items-center justify-between bg-gray-50 border rounded px-2 py-1.5">
+              <span>Personal</span>
+              <span>{completion.sections.personal.completed}/{completion.sections.personal.total}</span>
+            </div>
+            <div className="flex items-center justify-between bg-gray-50 border rounded px-2 py-1.5">
+              <span>Health</span>
+              <span>{completion.sections.health.completed}/{completion.sections.health.total}</span>
+            </div>
+            <div className="flex items-center justify-between bg-gray-50 border rounded px-2 py-1.5">
+              <span>Preferences</span>
+              <span>{completion.sections.preferences.completed}/{completion.sections.preferences.total}</span>
+            </div>
+          </div>
+        </div>
         <form onSubmit={handleSubmit}>
           {/* Profile Header */}
           <ProfileHeader
@@ -519,10 +637,16 @@ const ProfilePage: React.FC = () => {
             medicalDocumentFile={medicalDocumentFile}
             hasExistingVideo={hasExistingVideo}
             hasExistingDocument={hasExistingDocument}
+            personalRemaining={personalRemaining}
+            healthRemaining={healthRemaining}
           />
           
           {/* Partner Preferences Section */}
-          <PartnerPreferencesSection profile={profile} onInputChange={handleInputChange} />
+          <PartnerPreferencesSection
+            profile={profile}
+            onInputChange={handleInputChange}
+            preferencesRemaining={preferencesRemaining}
+          />
 
           {/* Submit Button */}
           <div className="mt-6 text-center">
@@ -684,10 +808,28 @@ const PersonalInfoSection: React.FC<{
   medicalDocumentFile: File | null;
   hasExistingVideo: boolean;
   hasExistingDocument: boolean;
-}> = ({ profile, onInputChange, onVideoUpload, onMedicalDocumentUpload, introVideoFile, medicalDocumentFile, hasExistingVideo, hasExistingDocument }) => {
+  personalRemaining: number;
+  healthRemaining: number;
+}> = ({
+  profile,
+  onInputChange,
+  onVideoUpload,
+  onMedicalDocumentUpload,
+  introVideoFile,
+  medicalDocumentFile,
+  hasExistingVideo,
+  hasExistingDocument,
+  personalRemaining,
+  healthRemaining
+}) => {
   return (
     <div className="mb-6">
       <h2 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Personal Information</h2>
+      {personalRemaining > 0 && (
+        <p className="text-sm text-gray-500 mb-4">
+          Add {personalRemaining} more field{personalRemaining === 1 ? "" : "s"} to complete this section.
+        </p>
+      )}
       <div className="space-y-5">
         {/* Marital Status */}
         <div>
@@ -809,6 +951,11 @@ const PersonalInfoSection: React.FC<{
         {/* Health & Genetics */}
         <div>
           <h3 className="text-xl font-semibold text-gray-800 mb-3 border-b pb-2">Health & Genetics</h3>
+          {healthRemaining > 0 && (
+            <p className="text-sm text-gray-500 mb-3">
+              Add {healthRemaining} more field{healthRemaining === 1 ? "" : "s"} to strengthen this section.
+            </p>
+          )}
           <p className="text-sm text-gray-500 mb-4 italic">All health information is optional and will be treated as sensitive information. You can choose to share only what you're comfortable with.</p>
           
           {/* Basic Health Status */}
@@ -1252,10 +1399,16 @@ const PersonalInfoSection: React.FC<{
 const PartnerPreferencesSection: React.FC<{
   profile: ProfileData;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
-}> = ({ profile, onInputChange }) => {
+  preferencesRemaining: number;
+}> = ({ profile, onInputChange, preferencesRemaining }) => {
   return (
     <div className="mb-6">
       <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Partner and Marriage Preferences</h2>
+      {preferencesRemaining > 0 && (
+        <p className="text-sm text-gray-500 mb-4">
+          Add {preferencesRemaining} more field{preferencesRemaining === 1 ? "" : "s"} to complete this section.
+        </p>
+      )}
       
       {/* Age Preferences */}
       <div className="mb-5">

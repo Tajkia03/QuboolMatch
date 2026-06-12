@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAdmin } from '../context/AdminContext';
 import VerifyUsers from '../components/admin/VerifyUsers';
 import AdminStats from '../components/admin/AdminStats';
+import UserReports from '../components/admin/UserReports';
 
 const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('stats');
@@ -17,6 +18,7 @@ const AdminDashboard: React.FC = () => {
   const sidebarItems = [
     { id: 'stats', label: 'Dashboard', icon: '📊' },
     { id: 'verify-users', label: 'Verify Users', icon: '👥' },
+    { id: 'user-reports', label: 'User Reports', icon: '📝' },
     { id: 'users', label: 'All Users', icon: '👤' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
@@ -27,6 +29,8 @@ const AdminDashboard: React.FC = () => {
         return <AdminStats />;
       case 'verify-users':
         return <VerifyUsers />;
+      case 'user-reports':
+        return <UserReports />;
       case 'users':
         return <div className="p-6">All Users component coming soon...</div>;
       case 'settings':

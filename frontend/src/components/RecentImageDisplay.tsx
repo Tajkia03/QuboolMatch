@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAccessToken } from '../services/api';
+import { API_BASE_URL, getAccessToken } from '../services/api';
 
 interface RecentImageDisplayProps {
   userId?: string; // If provided, shows image for specific user (admin view)
@@ -44,8 +44,8 @@ const RecentImageDisplay: React.FC<RecentImageDisplayProps> = ({
 
         // Determine endpoint based on whether userId is provided
         const endpoint = userId 
-          ? `http://localhost:8000/verification/recent-image/${userId}`
-          : 'http://localhost:8000/verification/recent-image';
+          ? `${API_BASE_URL}/verification/recent-image/${userId}`
+          : `${API_BASE_URL}/verification/recent-image`;
 
         const response = await fetch(endpoint, {
           headers: {

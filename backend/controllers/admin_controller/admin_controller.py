@@ -5,6 +5,8 @@ from models.user.user import User
 from shared.token import get_current_admin_user
 from pydantic import BaseModel
 from typing import List, Optional
+from typing import List, Optional, Literal
+from repositories.report_repository import ReportRepository
 
 router = APIRouter()
 
@@ -23,6 +25,29 @@ class AdminPromoteRequest(BaseModel):
 class UsersListResponse(BaseModel):
     users: List[UserResponse]
     total_count: int
+
+class AdminUserSummary(BaseModel):
+    id: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    is_admin: bool = False
+
+class AdminReportResponse(BaseModel):
+    id: str
+    reporter: AdminUserSummary
+    reported: AdminUserSummary
+    reason: str
+    details: Optional[str] = None
+    context: Optional[str] = None
+    status: str
+    created_at: Optional[str] = None
+
+class AdminReportsListResponse(BaseModel):
+    reports: List[AdminReportResponse]
+    total_count: int
+
+class UpdateReportStatusRequest(BaseModel):
+    status: Literal["pending", "resolved", "dismissed"]
 
 @router.get("/users", response_model=UsersListResponse)
 async def get_all_users(
@@ -142,4 +167,39 @@ async def get_admin_stats(
         "verified_users": verified_users,
         "rejected_verifications": rejected_verifications,
         "verification_rate": round((verified_users / total_users * 100), 2) if total_users > 0 else 0
+    }
+
+@router.get("/reports", response_model=AdminReportsListResponse)
+async def get_admin_reports(
+    skip: int = 0,
+    limit: int = 50,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """Admin endpoint to get user reports with reporter and reported user details."""
+    if status and status not in {"pending", "resolved", "dismissed"}:
+        raise HTTPException(status_code=400, detail="Invalid report status filter")
+
+    reports = ReportRepository.list_reports(db, skip=skip, limit=limit, status=status)
+    total_count = ReportRepository.count_reports(db, status=status)
+
+    return AdminReportsListResponse(reports=reports, total_count=total_count)
+
+@router.put("/reports/{report_id}/status")
+async def update_report_status(
+    report_id: str,
+    request: UpdateReportStatusRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """Admin endpoint to update a report's status."""
+    report = ReportRepository.update_status(db, report_id, request.status)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    return {
+        "success": True,
+        "message": f"Report status updated to {request.status}",
+        "report": report.to_dict()
     }

@@ -5,18 +5,30 @@ interface NIDImageDisplayProps {
   userId?: string; // If provided, shows image for specific user (admin view)
   className?: string;
   fallbackText?: string;
+  previewImage?: File | null; // For showing preview of newly selected image
 }
 
 const NIDImageDisplay: React.FC<NIDImageDisplayProps> = ({
   userId,
   className = "w-full h-48 object-cover border rounded-lg",
-  fallbackText = "No NID image uploaded"
+  fallbackText = "No NID image uploaded",
+  previewImage = null
 }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (previewImage) {
+      const url = URL.createObjectURL(previewImage);
+      setImageUrl(url);
+      setLoading(false);
+      setError(null);
+      return () => {
+        URL.revokeObjectURL(url);
+      };
+    }
+
     const fetchImage = async () => {
       try {
         setLoading(true);
@@ -69,7 +81,7 @@ const NIDImageDisplay: React.FC<NIDImageDisplayProps> = ({
         URL.revokeObjectURL(imageUrl);
       }
     };
-  }, [userId, fallbackText]);
+  }, [userId, fallbackText, previewImage]);
 
   // Cleanup object URL when component unmounts
   useEffect(() => {

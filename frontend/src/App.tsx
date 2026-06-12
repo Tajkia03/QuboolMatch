@@ -14,6 +14,7 @@ import FindMatches from "./pages/FindMatches";
 import Notifications from "./pages/Notifications";
 import InterestRequests from "./pages/InterestRequests";
 import Messages from "./pages/Messages";
+import FullProfileView from "./pages/FullProfileView";
 import { AuthProvider } from "./context/AuthContext";
 import { AdminProvider } from "./context/AdminContext";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -69,6 +70,11 @@ function App(): JSX.Element {
             <Route path="/messages" element={
               <ProtectedRoute>
                 <Layout><Messages /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/profiles/:userId/full" element={
+              <ProtectedRoute>
+                <Layout><FullProfileView /></Layout>
               </ProtectedRoute>
             } />
             

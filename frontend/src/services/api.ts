@@ -2,7 +2,7 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 export const getAccessToken = (): string | null => {
-  return sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken');
+  return sessionStorage.getItem('accessToken');
 };
 
 // Helper function to get auth headers
@@ -208,6 +208,41 @@ export const messageApi = {
   }
 };
 
+// ==================== TRUST & SAFETY ENDPOINTS ====================
+
+export const trustSafetyApi = {
+  reportUser: async (reportedUserId: string, reason: string, details?: string, context?: string) => {
+    const response = await fetch(`${API_BASE_URL}/api/reports`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        reported_user_id: reportedUserId,
+        reason,
+        details,
+        context
+      })
+    });
+    return handleResponse(response);
+  },
+
+  blockUser: async (blockedUserId: string) => {
+    const response = await fetch(`${API_BASE_URL}/api/blocks`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ blocked_user_id: blockedUserId })
+    });
+    return handleResponse(response);
+  },
+
+  unblockUser: async (blockedUserId: string) => {
+    const response = await fetch(`${API_BASE_URL}/api/blocks/${blockedUserId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(response);
+  }
+};
+
 // ==================== AUTH ENDPOINTS ====================
 
 export const authApi = {
@@ -234,5 +269,6 @@ export default {
   interest: interestApi,
   notification: notificationApi,
   message: messageApi,
+  trustSafety: trustSafetyApi,
   auth: authApi
 };

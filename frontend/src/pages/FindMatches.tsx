@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { interestApi } from "../services/api";
+import { interestApi, trustSafetyApi } from "../services/api";
 import { useNavigate } from "react-router-dom";
 
 // Define the structure for a user from the API
@@ -14,6 +14,10 @@ interface User {
   academic_background: string | null;
   profile_picture: string | null;
   interest_status: 'none' | 'pending_sent' | 'pending_received' | 'accepted' | 'rejected';
+  verification_status?: string | null;
+  matching_percentage?: number | null;
+  nid_verified?: boolean;
+  photo_verified?: boolean;
   // Overview fields
   marital_status?: string | null;
   height?: number | null;
@@ -31,7 +35,22 @@ interface User {
   willing_to_relocate?: boolean | null;
 }
 
-type ViewMode = 'all' | 'recommended';
+type ViewMode = 'all' | 'recommended' | 'interested';
+
+interface MatchResponse {
+  id: string;
+  matched_user: {
+    id: string;
+    name: string;
+    age: number;
+    religion: string | null;
+    profile_picture: string | null;
+    verification_status?: string | null;
+    matching_percentage?: number | null;
+    nid_verified?: boolean;
+    photo_verified?: boolean;
+  };
+}
 
 const FindMatches: React.FC = () => {
   const navigate = useNavigate();
@@ -90,14 +109,41 @@ const FindMatches: React.FC = () => {
           setHasMore(false);
           return;
         }
+      } else if (mode === 'interested') {
+        response = await interestApi.getMatches();
+        setMlReady(false);
       } else {
         response = await interestApi.browseUsers(pageNum, 20);
         setMlReady(false);
       }
-      
+
+      if (mode === 'interested') {
+        const matches = (response.matches || []) as MatchResponse[];
+        const newUsers = matches.map((match) => ({
+          id: match.matched_user.id,
+          name: match.matched_user.name,
+          age: match.matched_user.age,
+          gender: '',
+          religion: match.matched_user.religion,
+          location: null,
+          profession: null,
+          academic_background: null,
+          profile_picture: match.matched_user.profile_picture,
+          interest_status: 'accepted' as const,
+          verification_status: match.matched_user.verification_status,
+          matching_percentage: match.matched_user.matching_percentage,
+          nid_verified: match.matched_user.nid_verified,
+          photo_verified: match.matched_user.photo_verified,
+        }));
+        setUsers(newUsers);
+        setFilteredUsers(newUsers);
+        setHasMore(false);
+        return;
+      }
+
       const newUsers = response.users;
       const pagination = response.pagination;
-      
+
       if (append) {
         setUsers(prev => [...prev, ...newUsers]);
         setFilteredUsers(prev => [...prev, ...newUsers]);
@@ -105,7 +151,7 @@ const FindMatches: React.FC = () => {
         setUsers(newUsers);
         setFilteredUsers(newUsers);
       }
-      
+
       setHasMore(pagination?.has_more ?? false);
     } catch (err: any) {
       setError(err.message || 'Failed to load users');
@@ -205,6 +251,66 @@ const FindMatches: React.FC = () => {
     return status === 'pending_sent' || status === 'accepted' || status === 'rejected' || sendingInterest === userId;
   };
 
+  const renderVerificationBadges = (user: User) => {
+    if (!user.nid_verified && !user.photo_verified) {
+      return null;
+    }
+
+    return (
+      <div className="flex flex-wrap gap-2 mt-2">
+        {user.nid_verified && (
+          <span
+            className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium px-2 py-0.5"
+            title="NID verified by our team"
+          >
+            NID Verified
+          </span>
+        )}
+        {user.photo_verified && (
+          <span
+            className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5"
+            title="Photo verified via NID-to-photo match"
+          >
+            Photo Verified
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const handleReportUser = async (user: User) => {
+    const reason = window.prompt('Why are you reporting this user? (e.g., harassment, scam, spam)');
+    if (!reason || !reason.trim()) {
+      return;
+    }
+
+    const details = window.prompt('Any additional details? (optional)');
+    try {
+      await trustSafetyApi.reportUser(user.id, reason.trim(), details?.trim() || undefined, 'matches');
+      alert('Report submitted. Thank you for helping keep the community safe.');
+    } catch (err: any) {
+      alert(err?.message || 'Failed to submit report');
+    }
+  };
+
+  const handleBlockUser = async (user: User) => {
+    if (!window.confirm(`Block ${user.name}? You will no longer see each other.`)) {
+      return;
+    }
+
+    try {
+      await trustSafetyApi.blockUser(user.id);
+      setUsers((prev) => prev.filter((item) => item.id !== user.id));
+      setFilteredUsers((prev) => prev.filter((item) => item.id !== user.id));
+      if (selectedUser?.id === user.id) {
+        setSelectedUser(null);
+      }
+      alert(`${user.name} has been blocked.`);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to block user');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 py-8">
       <div className="container mx-auto px-4">
@@ -234,6 +340,16 @@ const FindMatches: React.FC = () => {
               >
                 ✨ Recommended
               </button>
+              <button
+                onClick={() => setViewMode('interested')}
+                className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${
+                  viewMode === 'interested'
+                    ? 'bg-white text-emerald-600 shadow'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Interested
+              </button>
             </div>
           </div>
 
@@ -262,76 +378,78 @@ const FindMatches: React.FC = () => {
           </div>
           
           {/* Filters Section */}
-          <div className="bg-gray-50 p-5 rounded-lg mb-8 border border-gray-200">
-            <h2 className="text-xl font-medium text-gray-800 mb-4">Filter Users</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                <input 
-                  type="text" 
-                  placeholder="City, Country"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  value={filters.location}
-                  onChange={(e) => handleFilterChange('location', e.target.value)}
-                />
-              </div>
+          {viewMode !== 'interested' && (
+            <div className="bg-gray-50 p-5 rounded-lg mb-8 border border-gray-200">
+              <h2 className="text-xl font-medium text-gray-800 mb-4">Filter Users</h2>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Religion</label>
-                <select 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  value={filters.religion}
-                  onChange={(e) => handleFilterChange('religion', e.target.value)}
-                >
-                  <option value="all">All</option>
-                  <option value="Islam">Islam</option>
-                  <option value="Hinduism">Hinduism</option>
-                  <option value="Christianity">Christianity</option>
-                  <option value="Buddhism">Buddhism</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                <select 
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  value={filters.gender}
-                  onChange={(e) => handleFilterChange('gender', e.target.value)}
-                >
-                  <option value="all">All</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Age: {filters.minAge} - {filters.maxAge}
-                </label>
-                <div className="flex gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                   <input 
-                    type="number" 
-                    min="18" 
-                    max="100"
-                    placeholder="Min"
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    value={filters.minAge}
-                    onChange={(e) => handleFilterChange('minAge', parseInt(e.target.value) || 18)}
+                    type="text" 
+                    placeholder="City, Country"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    value={filters.location}
+                    onChange={(e) => handleFilterChange('location', e.target.value)}
                   />
-                  <input 
-                    type="number" 
-                    min="18" 
-                    max="100"
-                    placeholder="Max"
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    value={filters.maxAge}
-                    onChange={(e) => handleFilterChange('maxAge', parseInt(e.target.value) || 60)}
-                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Religion</label>
+                  <select 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    value={filters.religion}
+                    onChange={(e) => handleFilterChange('religion', e.target.value)}
+                  >
+                    <option value="all">All</option>
+                    <option value="Islam">Islam</option>
+                    <option value="Hinduism">Hinduism</option>
+                    <option value="Christianity">Christianity</option>
+                    <option value="Buddhism">Buddhism</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                  <select 
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    value={filters.gender}
+                    onChange={(e) => handleFilterChange('gender', e.target.value)}
+                  >
+                    <option value="all">All</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Age: {filters.minAge} - {filters.maxAge}
+                  </label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="number" 
+                      min="18" 
+                      max="100"
+                      placeholder="Min"
+                      className="w-1/2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      value={filters.minAge}
+                      onChange={(e) => handleFilterChange('minAge', parseInt(e.target.value) || 18)}
+                    />
+                    <input 
+                      type="number" 
+                      min="18" 
+                      max="100"
+                      placeholder="Max"
+                      className="w-1/2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      value={filters.maxAge}
+                      onChange={(e) => handleFilterChange('maxAge', parseInt(e.target.value) || 60)}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
           
           {/* Error Message */}
           {error && (
@@ -354,7 +472,51 @@ const FindMatches: React.FC = () => {
             <div className="flex justify-center items-center py-20">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
             </div>
-          ) : error ? null : filteredUsers.length > 0 ? (
+          ) : error ? null : viewMode === 'interested' ? (
+            filteredUsers.length > 0 ? (
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+                <h2 className="text-xl font-semibold text-gray-800 mb-4">Mutual Connections</h2>
+                <div className="space-y-3">
+                  {filteredUsers.map((user) => (
+                    <div key={user.id} className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        {user.profile_picture ? (
+                          <img src={user.profile_picture} alt={user.name} className="h-12 w-12 rounded-full object-cover" />
+                        ) : (
+                          <div className="h-12 w-12 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold">
+                            {user.name.charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <button
+                            onClick={() => navigate(`/profiles/${encodeURIComponent(user.id)}/full`)}
+                            className="text-left text-sm font-semibold text-indigo-700 hover:text-indigo-900"
+                          >
+                            {user.name}
+                          </button>
+                          <div className="text-xs text-gray-500">{user.religion || 'Matched user'}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => navigate(`/messages?user=${encodeURIComponent(user.id)}&name=${encodeURIComponent(user.name)}`)}
+                        className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-md"
+                      >
+                        Message
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <svg className="mx-auto h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-3.314 0-6 2.239-6 5s2.686 5 6 5 6-2.239 6-5-2.686-5-6-5zm0 0V6a2 2 0 10-4 0v2m4 0a2 2 0 114 0v2" />
+                </svg>
+                <h3 className="mt-4 text-lg font-medium text-gray-900">No mutual connections yet</h3>
+                <p className="mt-2 text-sm text-gray-500">Accept interests to build your list here.</p>
+              </div>
+            )
+          ) : filteredUsers.length > 0 ? (
             <>
               <p className="text-gray-600 mb-4">Showing {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[70vh] overflow-y-auto p-2">
@@ -402,6 +564,7 @@ const FindMatches: React.FC = () => {
                     {/* Profile Details */}
                     <div className="p-5">
                       <h3 className="text-xl font-bold text-gray-800">{user.name}, {user.age}</h3>
+                      {renderVerificationBadges(user)}
                       
                       <div className="mt-2 text-sm text-gray-600 space-y-1">
                         {user.location && (
@@ -473,12 +636,20 @@ const FindMatches: React.FC = () => {
                             </button>
                           </div>
                         ) : user.interest_status === 'accepted' ? (
-                          <button
-                            onClick={() => navigate(`/messages?user=${encodeURIComponent(user.id)}&name=${encodeURIComponent(user.name)}`)}
-                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md font-medium transition-colors"
-                          >
-                            Message
-                          </button>
+                          <div className="space-y-2">
+                            <button
+                              onClick={() => navigate(`/profiles/${encodeURIComponent(user.id)}/full`)}
+                              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-4 rounded-md font-medium transition-colors"
+                            >
+                              View Full Profile
+                            </button>
+                            <button
+                              onClick={() => navigate(`/messages?user=${encodeURIComponent(user.id)}&name=${encodeURIComponent(user.name)}`)}
+                              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md font-medium transition-colors"
+                            >
+                              Message
+                            </button>
+                          </div>
                         ) : user.interest_status === 'pending_received' ? (
                           <button
                             onClick={() => navigate('/interest-requests')}
@@ -560,16 +731,31 @@ const FindMatches: React.FC = () => {
                   <div>
                     <h2 className="text-2xl font-bold">{selectedUser.name}, {selectedUser.age}</h2>
                     <p className="text-pink-100">{selectedUser.gender}</p>
+                    {renderVerificationBadges(selectedUser)}
                   </div>
                 </div>
-                <button 
-                  onClick={() => setSelectedUser(null)}
-                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleReportUser(selectedUser)}
+                    className="px-3 py-1.5 text-xs font-medium bg-white/20 hover:bg-white/30 rounded-full"
+                  >
+                    Report
+                  </button>
+                  <button
+                    onClick={() => handleBlockUser(selectedUser)}
+                    className="px-3 py-1.5 text-xs font-medium bg-white/20 hover:bg-white/30 rounded-full"
+                  >
+                    Block
+                  </button>
+                  <button 
+                    onClick={() => setSelectedUser(null)}
+                    className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
 

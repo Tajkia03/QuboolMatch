@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdmin } from '../context/AdminContext';
+import { API_BASE_URL } from '../services/api';
 
 const AdminLogin: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -16,7 +17,7 @@ const AdminLogin: React.FC = () => {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:8000/auth/admin-login', {
+      const response = await fetch(`${API_BASE_URL}/auth/admin-login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -126,13 +127,6 @@ const AdminLogin: React.FC = () => {
             </div>
           </div>
 
-          {/* Development helper */}
-          <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-            <h4 className="text-sm font-medium text-yellow-800">Development Login</h4>
-            <p className="text-xs text-yellow-700 mt-1">
-              Default admin: admin@quboolmatch.com / admin123
-            </p>
-          </div>
         </div>
       </div>
     </div>

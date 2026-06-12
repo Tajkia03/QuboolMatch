@@ -29,6 +29,7 @@ services:
       DATABASE_NAME: ${DATABASE_NAME:-qubool}
       SECRET_KEY: ${SECRET_KEY:-change_me_local}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODERATION_API_KEY: ${GEMINI_MODERATION_API_KEY:-}
     ports:
       - "8001:8000"
     depends_on:
@@ -58,6 +59,7 @@ services:
       DATABASE_NAME: ${DATABASE_NAME:-qubool}
       SECRET_KEY: ${SECRET_KEY:-change_me_local}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODERATION_API_KEY: ${GEMINI_MODERATION_API_KEY:-}
     command: ["python", "migrate.py", "upgrade"]
     depends_on:
       db:

@@ -186,6 +186,7 @@ const NIDVerification: React.FC = () => {
             <NIDImageDisplay 
               className="w-full h-48 object-cover border rounded-lg"
               fallbackText="No NID image uploaded yet"
+              previewImage={file}
             />
           </div>
 

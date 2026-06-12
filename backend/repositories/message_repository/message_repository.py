@@ -3,6 +3,7 @@ from typing import Dict, List
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from models.message.message import Message
+from repositories.block_repository import BlockRepository
 from repositories.profile_repository.profile_repository import ProfileRepository
 from repositories.user_repository.user_repository import UserRepository
 
@@ -100,6 +101,8 @@ class MessageRepository:
                 .count()
             )
 
+            block_status = BlockRepository.get_status(db, user_id, other_user_id)
+
             conversations.append(
                 {
                     "user": {
@@ -108,9 +111,14 @@ class MessageRepository:
                         "age": other_user.age,
                         "religion": other_user.religion,
                         "profile_picture": profile_picture_base64,
+                        "verification_status": other_user.verification_status,
+                        "matching_percentage": other_user.matching_percentage,
+                        "nid_verified": other_user.verification_status == "verified",
+                        "photo_verified": other_user.matching_percentage is not None and other_user.matching_percentage >= 70,
                     },
                     "last_message": msg.to_dict(),
                     "unread_count": unread_count,
+                    "block_status": block_status,
                 }
             )
 
