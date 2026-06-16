@@ -139,11 +139,11 @@ def get_recommendations(current_user_id: str, db: Session, top_n: int = 20) -> O
     user_index = _user_index_map[current_user_id]
     print(f"[ML_SERVICE] User index: {user_index}")
 
-    # Get up to 50 nearest neighbors
+    # Get up to 500 nearest neighbors (expanded to find opposite-gender matches)
     print(f"[ML_SERVICE] Getting neighbors...")
     distances, indices = _nn.kneighbors(
         _preprocess.transform(_get_user_feature_df(current_user_id, db)),
-        n_neighbors=min(51, len(_user_id_map))
+        n_neighbors=min(500, len(_user_id_map))
     )
     print(f"[ML_SERVICE] Found {len(indices[0])} neighbors")
 
@@ -158,26 +158,81 @@ def get_recommendations(current_user_id: str, db: Session, top_n: int = 20) -> O
 
     scored = []
     print(f"[ML_SERVICE] Scoring {len(candidates)} candidates...")
+    
+    # Log current user's gender
+    current_gender_raw = current_row.get("gender")
+    current_gender_normalized = _normalize(current_row.get("gender"))
+    print(f"[ML_SERVICE] Current user gender: raw='{current_gender_raw}' normalized='{current_gender_normalized}'")
+    
+    # Build list of opposite-gender user indices for filtering
+    opposite_gender_indices = set()
+    if current_gender_normalized != "unknown":
+        # Query DB for all opposite-gender users' indices
+        try:
+            opposite_gender = "Female" if current_gender_normalized == "male" else "Male"
+            result = db.execute(
+                text("""
+                    SELECT u.id FROM users u
+                    JOIN profiles p ON u.id = p.user_id
+                    WHERE LOWER(u.gender) = LOWER(:gender)
+                    AND u.is_deleted = FALSE
+                    AND p.is_completed = TRUE
+                """),
+                {"gender": opposite_gender}
+            )
+            opposite_gender_user_ids = {row[0] for row in result.fetchall()}
+            
+            # Map to KNN indices
+            for idx_str, uid in _user_id_map.items():
+                if uid in opposite_gender_user_ids:
+                    opposite_gender_indices.add(int(idx_str))
+            print(f"[ML_SERVICE] Found {len(opposite_gender_indices)} opposite-gender users in index")
+        except Exception as e:
+            print(f"[ML_SERVICE] Warning: could not pre-filter by gender: {e}")
+    
+    # Filter candidates to only opposite-gender users if we have that data
+    if opposite_gender_indices:
+        filtered_candidates = []
+        filtered_sims = []
+        for idx, sim in zip(candidates, cosine_sims):
+            if int(idx) in opposite_gender_indices:
+                filtered_candidates.append(idx)
+                filtered_sims.append(sim)
+        candidates = filtered_candidates
+        cosine_sims = filtered_sims
+        print(f"[ML_SERVICE] Filtered to {len(candidates)} opposite-gender candidates")
+    
+    # Track filter statistics
+    filter_map_fail = 0      # Failed to map KNN index to user_id or is self
+    filter_db_fetch_fail = 0 # Failed to fetch user row from DB
+    candidates_passed = 0    # Successfully scored
+    
     for knn_idx, sim in zip(candidates, cosine_sims):
+        # FILTER 1: Map lookup validation
         candidate_user_id = _user_id_map.get(str(knn_idx))
         if not candidate_user_id or candidate_user_id == current_user_id:
+            filter_map_fail += 1
             continue
 
+        # FILTER 2: Database fetch validation
         candidate_row = _fetch_user_row(candidate_user_id, db)
         if candidate_row is None:
+            filter_db_fetch_fail += 1
             continue
 
-        # Opposite gender filter
-        a_gender = _normalize(current_row.get("gender"))
-        b_gender = _normalize(candidate_row.get("gender"))
-        if a_gender != "unknown" and b_gender != "unknown" and a_gender == b_gender:
-            continue
-
+        # Gender filtering is now done via pre-filtering, so all remaining candidates are opposite-gender
+        candidates_passed += 1
         s_ab = _preference_score(current_row, candidate_row)
         s_ba = _preference_score(candidate_row, current_row)
         mutual_score = min(s_ab, s_ba)
 
         scored.append((candidate_user_id, mutual_score, float(sim)))
+    
+    # Log filter statistics
+    print(f"[ML_SERVICE] Filter breakdown:")
+    print(f"  - FILTER 1 (Map lookup): {filter_map_fail} rejected")
+    print(f"  - FILTER 2 (DB fetch):   {filter_db_fetch_fail} rejected")
+    print(f"  - Candidates passed:     {candidates_passed} scored")
 
     # Sort by mutual_score desc, then cosine similarity desc
     scored.sort(key=lambda x: (x[1], x[2]), reverse=True)

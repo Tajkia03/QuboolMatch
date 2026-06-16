@@ -24,17 +24,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
   useEffect(() => {
-    const token = sessionStorage.getItem('accessToken');
+    const token = sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken');
     setIsLoggedIn(!!token);
   }, []);
 
   const login = (token: string) => {
     sessionStorage.setItem('accessToken', token);
+    localStorage.setItem('accessToken', token);
     setIsLoggedIn(true);
   };
 
   const logout = () => {
     sessionStorage.removeItem('accessToken');
+    localStorage.removeItem('accessToken');
     setIsLoggedIn(false);
   };
 

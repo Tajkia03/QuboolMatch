@@ -79,7 +79,12 @@ class Profile(Base):
     lifestyle_pref_dietary_match = Column(Boolean, default=False)
     
     living_with_in_laws = Column(String, nullable=True)
+    living_arrangement_comment = Column(Text, nullable=True)
+    fertility_comment = Column(Text, nullable=True)
+    preferred_religion_comment = Column(Text, nullable=True)
+    preferred_education_comment = Column(Text, nullable=True)
     career_support_expectations = Column(Text, nullable=True)
+    career_support_comment = Column(Text, nullable=True)
     necessary_preferences = Column(Text, nullable=True)  # JSON array stored as text
     additional_comments = Column(Text, nullable=True)
     
@@ -180,7 +185,12 @@ class Profile(Base):
             'lifestyle_pref_alcohol': self.lifestyle_pref_alcohol,
             'lifestyle_pref_dietary_match': self.lifestyle_pref_dietary_match,
             'living_with_in_laws': self.living_with_in_laws,
+            'living_arrangement_comment': self.living_arrangement_comment,
+            'fertility_comment': self.fertility_comment,
+            'preferred_religion_comment': self.preferred_religion_comment,
+            'preferred_education_comment': self.preferred_education_comment,
             'career_support_expectations': self.career_support_expectations,
+            'career_support_comment': self.career_support_comment,
             'necessary_preferences': self.necessary_preferences,
             'additional_comments': self.additional_comments,
             'is_completed': self.is_completed,

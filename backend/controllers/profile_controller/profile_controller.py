@@ -150,7 +150,12 @@ class ProfileCreate(BaseModel):
     lifestyle_pref_dietary_match: Optional[bool] = False
     
     living_with_in_laws: Optional[str] = None
+    living_arrangement_comment: Optional[str] = None
+    fertility_comment: Optional[str] = None
+    preferred_religion_comment: Optional[str] = None
+    preferred_education_comment: Optional[str] = None
     career_support_expectations: Optional[str] = None
+    career_support_comment: Optional[str] = None
     necessary_preferences: Optional[str] = None  # Accept as string (JSON)
     additional_comments: Optional[str] = None
 

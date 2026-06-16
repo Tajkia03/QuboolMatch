@@ -152,15 +152,6 @@ const Navbar: React.FC = () => {
                 </Link>
               </>
             )}
-            
-            {/* Admin Link - Dev Only */}
-            <Link
-              to="/admin-login"
-              className="px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors duration-200 text-sm font-medium"
-              title="Admin Access"
-            >
-              Admin
-            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -234,13 +225,6 @@ const Navbar: React.FC = () => {
                   </>
                 )}
                 
-                <Link
-                  to="/admin-login"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="block w-full px-4 py-2.5 rounded-lg text-center text-red-600 border-2 border-red-300 hover:bg-red-50 transition-colors duration-200 font-medium text-sm"
-                >
-                  Admin Access
-                </Link>
               </div>
             </div>
           </div>

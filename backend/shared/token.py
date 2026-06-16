@@ -19,7 +19,7 @@ security = HTTPBearer()
 class Token:
     @staticmethod
     def generate_and_sign(user_id: str) -> str:
-        expire = datetime.now(timezone.utc) + timedelta(days=1)
+        expire = datetime.now(timezone.utc) + timedelta(days=7)
         payload = {"user_id": user_id, "exp": expire}
         return jwt.encode(payload, get_settings().SECRET_KEY, algorithm="HS256")
 

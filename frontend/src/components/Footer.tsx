@@ -1,7 +1,13 @@
 import React from 'react';
-import { Heart, Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { Heart, Facebook, Twitter, Instagram, Youtube, Mail, Phone } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Footer = () => {
+  const { isLoggedIn } = useAuth();
+  const location = useLocation();
+  const showAdminLink = location.pathname === '/' && !isLoggedIn;
+
   return (
     <footer className="bg-gray-900 text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -104,6 +110,11 @@ const Footer = () => {
               <a href="#" className="hover:text-white transition-colors duration-200">Privacy Policy</a>
               <a href="#" className="hover:text-white transition-colors duration-200">Terms of Service</a>
               <a href="#" className="hover:text-white transition-colors duration-200">Safety Center</a>
+              {showAdminLink && (
+                <Link to="/admin-login" className="text-xs text-gray-500 hover:text-gray-300 transition-colors duration-200">
+                  Admin
+                </Link>
+              )}
             </div>
           </div>
         </div>

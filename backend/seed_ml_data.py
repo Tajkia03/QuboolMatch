@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, text
 
 
 DB_URL = "postgresql://postgres:mim123@localhost:5432/qubool"
-LIMIT = 10000            # how many demo users to create
+LIMIT = 30000            # how many demo users to create
 BATCH_SIZE = 300      # commit per batch (safe on memory)
 DEFAULT_PASSWORD = "seed123"
 

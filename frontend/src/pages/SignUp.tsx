@@ -34,7 +34,36 @@ const SignUp: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    
+    // Client-side validations
+    const ageNum = parseInt(formData.age || "0");
+    if (isNaN(ageNum) || ageNum < 18) {
+      setError("You must be at least 18 years old to sign up.");
+      setLoading(false);
+      return;
+    }
+
+    const fromNum = ageRange.from ? parseInt(ageRange.from) : null;
+    const toNum = ageRange.to ? parseInt(ageRange.to) : null;
+
+    if (fromNum !== null && fromNum < 18) {
+      setError("Preferred age range 'From' must be at least 18.");
+      setLoading(false);
+      return;
+    }
+    if (toNum !== null && toNum < 18) {
+      setError("Preferred age range 'To' must be at least 18.");
+      setLoading(false);
+      return;
+    }
+
+    // Ensure preferred range has lower value in 'from' and higher in 'to'
+    if (fromNum !== null && toNum !== null && fromNum > toNum) {
+      setError("Preferred age range 'From' must be less than or equal to 'To'.");
+      setLoading(false);
+      return;
+    }
+    const finalFrom = fromNum;
+    const finalTo = toNum;
     try {
       // Prepare the complete signup data
       const signupData = {
@@ -43,10 +72,10 @@ const SignUp: React.FC = () => {
         password: formData.password,
         gender: formData.gender,
         nid: formData.nid,
-        age: parseInt(formData.age),
+        age: ageNum,
         religion: formData.religion || null,
-        preferred_age_from: ageRange.from ? parseInt(ageRange.from) : null,
-        preferred_age_to: ageRange.to ? parseInt(ageRange.to) : null,
+        preferred_age_from: finalFrom,
+        preferred_age_to: finalTo,
       };
 
       // Call backend API for sign up
@@ -169,6 +198,8 @@ const SignUp: React.FC = () => {
                 label="Age"
                 placeholder="Your age"
                 value={formData.age}
+                min={18}
+                max={99}
                 onChange={handleInputChange}
                 required
               />
@@ -212,6 +243,8 @@ const SignUp: React.FC = () => {
                   name="from"
                   placeholder="From"
                   value={ageRange.from}
+                  min={18}
+                  max={99}
                   onChange={handleAgeRangeChange}
                 />
                 <Input
@@ -219,6 +252,8 @@ const SignUp: React.FC = () => {
                   name="to"
                   placeholder="To"
                   value={ageRange.to}
+                  min={18}
+                  max={99}
                   onChange={handleAgeRangeChange}
                 />
               </div>

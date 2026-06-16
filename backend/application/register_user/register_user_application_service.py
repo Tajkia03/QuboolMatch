@@ -24,6 +24,22 @@ def execute(params: UserRegistrationData, db: Session):
     """
     transaction_manager = TransactionManager(db)
 
+    # Server-side validations
+    if params.age < 18:
+        raise ValueError('User must be at least 18 years old to register')
+
+    pf = params.preferred_age_from
+    pt = params.preferred_age_to
+
+    if pf is not None and pf < 18:
+        raise ValueError("Preferred age range 'From' must be at least 18")
+    if pt is not None and pt < 18:
+        raise ValueError("Preferred age range 'To' must be at least 18")
+
+    # Reject if preferred range 'from' is greater than 'to'
+    if pf is not None and pt is not None and pf > pt:
+        raise ValueError("Preferred age range 'From' must be less than or equal to 'To'")
+
     try:
         with transaction_manager.transaction() as session:
             # Create a new user object and add it to the session
@@ -35,8 +51,8 @@ def execute(params: UserRegistrationData, db: Session):
                 nid=params.nid,
                 age=params.age,
                 religion=params.religion,
-                preferred_age_from=params.preferred_age_from,
-                preferred_age_to=params.preferred_age_to
+                preferred_age_from=pf,
+                preferred_age_to=pt
             )
             session.add(new_user)
 
