@@ -2,14 +2,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import NIDImageDisplay from "../components/NIDImageDisplay";
-import RecentImageDisplay from "../components/RecentImageDisplay";
 import { getAccessToken, API_BASE_URL } from "../services/api";
 
 const NIDVerification: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
-  const [recentImage, setRecentImage] = useState<File | null>(null);
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("Not Submitted");
   const [loading, setLoading] = useState(false);
@@ -34,13 +30,6 @@ const NIDVerification: React.FC = () => {
           const statusData = await response.json();
           setCurrentStatus(statusData);
           
-          // Pre-fill form if data exists
-          if (statusData.verification_date) {
-            setDate(statusData.verification_date);
-          }
-          if (statusData.verification_time) {
-            setTime(statusData.verification_time);
-          }
           if (statusData.verification_notes) {
             setNotes(statusData.verification_notes);
           }
@@ -72,12 +61,6 @@ const NIDVerification: React.FC = () => {
     }
   };
 
-  const handleRecentImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setRecentImage(e.target.files[0]);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -89,21 +72,10 @@ const NIDVerification: React.FC = () => {
       if (!file) {
         throw new Error("Please select a NID image file");
       }
-      if (!date) {
-        throw new Error("Please select a verification date");
-      }
-      if (!time) {
-        throw new Error("Please select a verification time");
-      }
 
       // Create FormData object
       const formData = new FormData();
       formData.append("nid_image", file);
-      if (recentImage) {
-        formData.append("recent_image", recentImage);
-      }
-      formData.append("verification_date", date);
-      formData.append("verification_time", time);
       if (notes.trim()) {
         formData.append("verification_notes", notes);
       }
@@ -166,7 +138,7 @@ const NIDVerification: React.FC = () => {
           {/* Upload NID Image */}
           <div className="mb-4">
             <label htmlFor="nidImage" className="block text-sm font-medium text-gray-700">
-              Upload Your NID Image
+              Upload an image of the front part of your NID
             </label>
             <input
               type="file"
@@ -187,54 +159,6 @@ const NIDVerification: React.FC = () => {
               className="w-full h-48 object-cover border rounded-lg"
               fallbackText="No NID image uploaded yet"
               previewImage={file}
-            />
-          </div>
-
-          {/* Recent Image to Verify */}
-          <div className="mb-4">
-            <label htmlFor="recentImage" className="block text-sm font-medium text-gray-700 mb-2">
-              Upload Your Recent Image to Verify
-            </label>
-            <input
-              type="file"
-              id="recentImage"
-              accept="image/*"
-              onChange={handleRecentImageChange}
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-            />
-            {recentImage && <p className="text-sm text-gray-600 mt-2">Selected File: {recentImage.name}</p>}
-            <div className="mt-2">
-              <RecentImageDisplay 
-                className="w-full h-48 object-cover border rounded-lg"
-                fallbackText="No recent image uploaded yet"
-                previewImage={recentImage}
-              />
-            </div>
-          </div>
-
-          {/* Schedule Video Call */}
-          <div className="mb-4">
-            <label htmlFor="date" className="block text-sm font-medium text-gray-700">
-              Select a Date
-            </label>
-            <input
-              type="date"
-              id="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-          <div className="mb-4">
-            <label htmlFor="time" className="block text-sm font-medium text-gray-700">
-              Select a Time
-            </label>
-            <input
-              type="time"
-              id="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
 
@@ -309,9 +233,9 @@ const NIDVerification: React.FC = () => {
               {status === "Verification Rejected" && (
                 <p className="text-xs mt-2 opacity-90">
                   Your verification was rejected. Please resubmit with correct information.
-                  {currentStatus?.verification_notes && (
+                  {currentStatus?.rejection_notes && (
                     <span className="block mt-1 font-medium">
-                      Reason: {currentStatus.verification_notes}
+                      Reason: {currentStatus.rejection_notes}
                     </span>
                   )}
                 </p>

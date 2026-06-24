@@ -71,6 +71,15 @@ python migrate.py create "Add email verification fields"
 - Review the `upgrade()` and `downgrade()` functions
 - Modify if needed for custom logic
 
+### Profile Page Fields
+If you need to update an existing database for the profile page, run the manual migration script:
+
+```bash
+python migrations/add_profile_page_fields.py
+```
+
+This adds the new profile fields without changing the existing guardian phone number or guardian relation columns.
+
 ### 4. Applying Migrations
 ```bash
 # Apply to development database

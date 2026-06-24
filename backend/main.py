@@ -12,6 +12,7 @@ from controllers import trust_safety_controller
 from models.message.message import Message
 from models.block import Block
 from models.report import Report
+from models.verification_rejection import VerificationRejection
 from create_db import create_database
 from middlewares import cors_middleware
 from middlewares import static_middleware

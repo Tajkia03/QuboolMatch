@@ -12,7 +12,7 @@ const AdminDashboard: React.FC = () => {
 
   const handleLogout = () => {
     adminLogout();
-    navigate('/admin-login');
+    navigate('/admin-login', { replace: true });
   };
 
   const sidebarItems = [

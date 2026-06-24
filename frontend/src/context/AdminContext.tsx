@@ -23,15 +23,20 @@ interface AdminProviderProps {
 }
 
 export const AdminProvider: React.FC<AdminProviderProps> = ({ children }) => {
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+    return Boolean(sessionStorage.getItem('adminAccessToken'));
+  });
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   useEffect(() => {
-    // Check if there's an admin token in localStorage
-    const adminToken = localStorage.getItem('adminAccessToken');
+    // Check if there's an admin token in the current browser session.
+    const adminToken = sessionStorage.getItem('adminAccessToken');
     if (adminToken) {
       // Verify if the token is still valid and user is admin
       verifyAdminToken(adminToken);
+    } else {
+      setIsAdminLoggedIn(false);
+      setIsAdmin(false);
     }
   }, []);
 
@@ -49,7 +54,7 @@ export const AdminProvider: React.FC<AdminProviderProps> = ({ children }) => {
         setIsAdmin(true);
       } else {
         // Token is invalid or user is not admin
-        localStorage.removeItem('adminAccessToken');
+        sessionStorage.removeItem('adminAccessToken');
         setIsAdminLoggedIn(false);
         setIsAdmin(false);
       }
@@ -62,13 +67,13 @@ export const AdminProvider: React.FC<AdminProviderProps> = ({ children }) => {
   };
 
   const adminLogin = (token: string) => {
-    localStorage.setItem('adminAccessToken', token);
+    sessionStorage.setItem('adminAccessToken', token);
     setIsAdminLoggedIn(true);
     setIsAdmin(true);
   };
 
   const adminLogout = () => {
-    localStorage.removeItem('adminAccessToken');
+    sessionStorage.removeItem('adminAccessToken');
     setIsAdminLoggedIn(false);
     setIsAdmin(false);
   };

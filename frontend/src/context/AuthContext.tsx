@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect, ReactNode } from
 
 interface AuthContextType {
   isLoggedIn: boolean;
+  isAuthReady: boolean;
   login: (token: string) => void;
   logout: () => void;
 }
@@ -20,28 +21,71 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+const ACCESS_TOKEN_KEY = 'accessToken';
+
+const getStoredToken = (): string | null => {
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+};
+
+const isJwtStillValid = (token: string | null): boolean => {
+  if (!token) {
+    return false;
+  }
+
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    return false;
+  }
+
+  try {
+    const payloadJson = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+    const payload = JSON.parse(payloadJson) as { exp?: number };
+    if (typeof payload.exp !== 'number') {
+      return true;
+    }
+
+    return payload.exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
+};
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => isJwtStillValid(getStoredToken()));
+  const [isAuthReady, setIsAuthReady] = useState<boolean>(false);
 
   useEffect(() => {
-    const token = sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken');
-    setIsLoggedIn(!!token);
+    const token = getStoredToken();
+    setIsLoggedIn(isJwtStillValid(token));
+    setIsAuthReady(true);
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key !== ACCESS_TOKEN_KEY) {
+        return;
+      }
+
+      setIsLoggedIn(isJwtStillValid(event.newValue));
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const login = (token: string) => {
-    sessionStorage.setItem('accessToken', token);
-    localStorage.setItem('accessToken', token);
-    setIsLoggedIn(true);
+    localStorage.setItem(ACCESS_TOKEN_KEY, token);
+    setIsLoggedIn(isJwtStillValid(token));
+    setIsAuthReady(true);
   };
 
   const logout = () => {
-    sessionStorage.removeItem('accessToken');
-    localStorage.removeItem('accessToken');
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
     setIsLoggedIn(false);
+    setIsAuthReady(true);
   };
 
   const value = {
     isLoggedIn,
+    isAuthReady,
     login,
     logout
   };

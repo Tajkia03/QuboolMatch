@@ -11,6 +11,7 @@ from models.user.user import User
 import json
 import base64
 import re
+from datetime import datetime
 
 router = APIRouter()
 
@@ -89,11 +90,14 @@ class ProfileCreate(BaseModel):
     # Basic user information
     name: Optional[str] = None
     age: Optional[int] = None
+    date_of_birth: Optional[str] = None
     gender: Optional[str] = None
     religion: Optional[str] = None
 
     # Personal Information
     location: Optional[str] = None
+    father_name: Optional[str] = None
+    mother_name: Optional[str] = None
     guardian_name: Optional[str] = None
     guardian_relation: Optional[str] = None
     guardian_relation_other: Optional[str] = None
@@ -186,6 +190,7 @@ async def create_profile(
         profile_dict = profile_data.dict()
         name = profile_dict.pop("name", None)
         age = profile_dict.pop("age", None)
+        date_of_birth = profile_dict.pop("date_of_birth", None)
         gender = profile_dict.pop("gender", None)
         religion = profile_dict.pop("religion", None)
         # genetic_conditions and necessary_preferences are already strings from frontend
@@ -216,6 +221,8 @@ async def create_profile(
             user.name = name
         if age is not None:
             user.age = age
+        if date_of_birth:
+            user.date_of_birth = datetime.strptime(date_of_birth, "%Y-%m-%d").date()
         if gender is not None:
             user.gender = gender
         if religion is not None:
@@ -231,6 +238,7 @@ async def create_profile(
                     **profile.to_dict(),
                     "name": user.name,
                     "age": user.age,
+                    "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
                     "gender": user.gender,
                     "religion": user.religion,
                 }
@@ -266,6 +274,7 @@ async def get_profile(
                 **profile.to_dict(),
                 "name": user.name,
                 "age": user.age,
+                "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
                 "gender": user.gender,
                 "religion": user.religion,
             },
@@ -300,6 +309,7 @@ async def update_profile(
         profile_dict = profile_data.dict(exclude_unset=True)
         name = profile_dict.pop("name", None)
         age = profile_dict.pop("age", None)
+        date_of_birth = profile_dict.pop("date_of_birth", None)
         gender = profile_dict.pop("gender", None)
         religion = profile_dict.pop("religion", None)
         # genetic_conditions and necessary_preferences are already strings from frontend
@@ -330,6 +340,8 @@ async def update_profile(
             user.name = name
         if age is not None:
             user.age = age
+        if date_of_birth is not None:
+            user.date_of_birth = datetime.strptime(date_of_birth, "%Y-%m-%d").date() if date_of_birth else None
         if gender is not None:
             user.gender = gender
         if religion is not None:
@@ -345,6 +357,7 @@ async def update_profile(
                     **updated_profile.to_dict(),
                     "name": user.name,
                     "age": user.age,
+                    "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
                     "gender": user.gender,
                     "religion": user.religion,
                 }
@@ -830,6 +843,7 @@ async def get_full_profile(
             "name": user.name,
             "email": user.email,
             "age": user.age,
+            "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
             "gender": user.gender,
             "religion": user.religion,
             "nid": user.nid,

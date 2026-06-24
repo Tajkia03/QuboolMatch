@@ -1,6 +1,6 @@
 // src/pages/SignIn.tsx
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Navigate, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { API_BASE_URL } from "../services/api";
 import { Button, Input, Card } from "../components/ui";
@@ -11,7 +11,13 @@ const SignIn: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isLoggedIn, isAuthReady } = useAuth();
+
+  useEffect(() => {
+    if (isAuthReady && isLoggedIn) {
+      navigate("/", { replace: true });
+    }
+  }, [isAuthReady, isLoggedIn, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +48,7 @@ const SignIn: React.FC = () => {
       login(data.access_token);
       
       // Navigate to home page after successful sign in
-      navigate("/");
+      navigate("/", { replace: true });
     } catch (err) {
       console.error("Sign in error:", err);
       setError(err instanceof Error ? err.message : "An error occurred during sign in");
@@ -52,6 +58,9 @@ const SignIn: React.FC = () => {
   };
 
   return (
+    isAuthReady && isLoggedIn ? (
+      <Navigate to="/" replace />
+    ) : (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-accent-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md">
         {/* Logo & Header */}
@@ -141,6 +150,7 @@ const SignIn: React.FC = () => {
         </p>
       </div>
     </div>
+    )
   );
 };
 

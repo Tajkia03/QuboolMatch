@@ -17,6 +17,7 @@ class User(Base):
     gender = Column(String, nullable=False)  # Male/Female/Other
     nid = Column(String, nullable=False, unique=True)  # National ID number
     age = Column(Integer, nullable=False)
+    date_of_birth = Column(Date, nullable=True)
     religion = Column(String, nullable=True)
     
     # Preferred age range for matching
@@ -116,8 +117,6 @@ class User(Base):
 
     def reject_verification(self, notes: str = None):
         self.verification_status = "rejected"
-        if notes:
-            self.verification_notes = notes
         return self
 
     def verify_guardian(self):

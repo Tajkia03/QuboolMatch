@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isAuthReady } = useAuth();
   const location = useLocation();
 
   // For development, allow access to FindMatches, NIDVerification, and Notifications
@@ -18,6 +18,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     location.pathname === '/nid-verification'
   ) {
     return <>{children}</>;
+  }
+
+  if (!isAuthReady) {
+    return null;
   }
 
   if (!isLoggedIn) {

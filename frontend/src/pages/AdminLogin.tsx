@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAdmin } from '../context/AdminContext';
 import { API_BASE_URL } from '../services/api';
 
@@ -8,8 +8,14 @@ const AdminLogin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { adminLogin } = useAdmin();
+  const { adminLogin, isAdminLoggedIn } = useAdmin();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAdminLoggedIn) {
+      navigate('/admin-dashboard', { replace: true });
+    }
+  }, [isAdminLoggedIn, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +43,7 @@ const AdminLogin: React.FC = () => {
       
       // Since we're using admin-login endpoint, we know the user is admin
       adminLogin(data.access_token);
-      navigate('/admin-dashboard');
+      navigate('/admin-dashboard', { replace: true });
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Login failed');
     } finally {
@@ -46,6 +52,9 @@ const AdminLogin: React.FC = () => {
   };
 
   return (
+    isAdminLoggedIn ? (
+      <Navigate to="/admin-dashboard" replace />
+    ) : (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
@@ -130,6 +139,7 @@ const AdminLogin: React.FC = () => {
         </div>
       </div>
     </div>
+    )
   );
 };
 
