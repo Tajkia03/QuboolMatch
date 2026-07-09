@@ -33,6 +33,7 @@ interface User {
   preferred_age_max?: number | null;
   living_with_in_laws?: string | null;
   willing_to_relocate?: boolean | null;
+  recommendation_reasons?: string[];
 }
 
 type ViewMode = 'all' | 'recommended' | 'interested';
@@ -312,40 +313,42 @@ const FindMatches: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <div className="container mx-auto px-4">
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h1 className="text-3xl font-bold text-gray-800 text-center mb-6">Find Your Perfect Match</h1>
+    <div className="min-h-screen bg-[#f7f5f8] pb-12">
+      <div className="overflow-hidden bg-gradient-to-br from-[#30204f] via-[#694390] to-[#b7547c] text-white shadow-xl">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-pink-200">Thoughtful connections</p>
+          <h1 className="mt-3 text-4xl font-extrabold tracking-tight sm:text-5xl">Find someone worth knowing.</h1>
+          <p className="mt-3 max-w-2xl text-sm text-purple-100 sm:text-base">Thoughtful recommendations shaped by what matters to you—not an endless swipe.</p>
 
           {/* View Mode Toggle */}
-          <div className="flex justify-center mb-6">
-            <div className="inline-flex rounded-lg border border-gray-200 bg-gray-100 p-1">
+          <div className="mt-8 flex">
+            <div className="inline-flex flex-wrap gap-2">
               <button
                 onClick={() => setViewMode('all')}
-                className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${
+                className={`rounded-full border px-5 py-2 text-sm font-medium transition-all ${
                   viewMode === 'all'
-                    ? 'bg-white text-gray-800 shadow'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'border-white bg-white text-[#513172] shadow-lg'
+                    : 'border-white/25 bg-white/5 text-purple-100 hover:bg-white/10'
                 }`}
               >
                 All Profiles
               </button>
               <button
                 onClick={() => setViewMode('recommended')}
-                className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${
+                className={`rounded-full border px-5 py-2 text-sm font-medium transition-all ${
                   viewMode === 'recommended'
-                    ? 'bg-white text-pink-600 shadow'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'border-white bg-white text-[#513172] shadow-lg'
+                    : 'border-white/25 bg-white/5 text-purple-100 hover:bg-white/10'
                 }`}
               >
                 ✨ Recommended
               </button>
               <button
                 onClick={() => setViewMode('interested')}
-                className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${
+                className={`rounded-full border px-5 py-2 text-sm font-medium transition-all ${
                   viewMode === 'interested'
-                    ? 'bg-white text-emerald-600 shadow'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'border-white bg-white text-[#513172] shadow-lg'
+                    : 'border-white/25 bg-white/5 text-purple-100 hover:bg-white/10'
                 }`}
               >
                 Interested
@@ -355,32 +358,37 @@ const FindMatches: React.FC = () => {
 
           {/* AI badge — only shown when model is ready in recommended mode */}
           {viewMode === 'recommended' && mlReady && (
-            <div className="flex items-center justify-center mb-4">
-              <span className="inline-flex items-center gap-1 bg-pink-50 text-pink-700 border border-pink-200 text-xs font-medium px-3 py-1 rounded-full">
+            <div className="mt-4 flex items-center">
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white">
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM6.343 5.343a1 1 0 00-1.414 1.414l.707.707A1 1 0 007.05 6.05l-.707-.707zM3 10a1 1 0 100 2h1a1 1 0 100-2H3zM14.657 5.343a1 1 0 010 1.414l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 10a1 1 0 100 2h-1a1 1 0 100-2h1zM10 17a1 1 0 100-2h-.01a1 1 0 100 2H10zM7.05 13.95a1 1 0 010 1.414l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 0zM13.657 13.95a1 1 0 00-1.414 0l-.707.707a1 1 0 001.414 1.414l.707-.707a1 1 0 000-1.414z"/></svg>
                 Ranked by AI · Based on your profile compatibility
               </span>
             </div>
           )}
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+          <div className="mt-6 rounded-xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
             <div className="flex">
               <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <svg className="h-5 w-5 text-pink-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-blue-700">
+                <p className="text-sm text-purple-50">
                   You can send interest to users. Maximum 3 mutual interests allowed. Full profiles are visible only after mutual interest.
                 </p>
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <div className="relative -mt-1 pt-7">
           
           {/* Filters Section */}
           {viewMode !== 'interested' && (
-            <div className="bg-gray-50 p-5 rounded-lg mb-8 border border-gray-200">
-              <h2 className="text-xl font-medium text-gray-800 mb-4">Filter Users</h2>
+            <div className="mb-8 rounded-2xl border border-purple-100 bg-white p-5 shadow-[0_14px_40px_rgba(65,37,81,0.10)]">
+              <h2 className="mb-4 text-lg font-semibold text-gray-800">Refine your matches</h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
@@ -388,7 +396,7 @@ const FindMatches: React.FC = () => {
                   <input 
                     type="text" 
                     placeholder="City, Country"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 shadow-sm outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
                     value={filters.location}
                     onChange={(e) => handleFilterChange('location', e.target.value)}
                   />
@@ -397,7 +405,7 @@ const FindMatches: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Religion</label>
                   <select 
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 shadow-sm outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
                     value={filters.religion}
                     onChange={(e) => handleFilterChange('religion', e.target.value)}
                   >
@@ -412,7 +420,7 @@ const FindMatches: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
                   <select 
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 shadow-sm outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
                     value={filters.gender}
                     onChange={(e) => handleFilterChange('gender', e.target.value)}
                   >
@@ -432,7 +440,7 @@ const FindMatches: React.FC = () => {
                       min="18" 
                       max="100"
                       placeholder="Min"
-                      className="w-1/2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-1/2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 shadow-sm outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
                       value={filters.minAge}
                       onChange={(e) => handleFilterChange('minAge', parseInt(e.target.value) || 18)}
                     />
@@ -441,7 +449,7 @@ const FindMatches: React.FC = () => {
                       min="18" 
                       max="100"
                       placeholder="Max"
-                      className="w-1/2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-1/2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 shadow-sm outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
                       value={filters.maxAge}
                       onChange={(e) => handleFilterChange('maxAge', parseInt(e.target.value) || 60)}
                     />
@@ -518,24 +526,27 @@ const FindMatches: React.FC = () => {
             )
           ) : filteredUsers.length > 0 ? (
             <>
-              <p className="text-gray-600 mb-4">Showing {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[70vh] overflow-y-auto p-2">
+              <div className="mb-5 flex items-center justify-between">
+                <p className="font-semibold text-gray-800">{filteredUsers.length} profile{filteredUsers.length !== 1 ? 's' : ''} match your preferences</p>
+                <span className="text-sm text-gray-500">Best match first</span>
+              </div>
+              <div className="grid grid-cols-1 items-start gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredUsers.map((user) => (
-                  <div key={user.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300">
+                  <div key={user.id} className="overflow-hidden rounded-2xl border border-purple-100 bg-white shadow-[0_8px_28px_rgba(57,38,79,0.06)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_38px_rgba(57,38,79,0.14)]">
                     {/* Profile Image */}
                     <div className="relative">
                       {user.profile_picture ? (
                         <img 
                           src={user.profile_picture} 
                           alt={`${user.name}'s profile`}
-                          className="w-full h-60 object-cover object-center"
+                          className="h-48 w-full object-cover object-center"
                           onError={(e) => {
                             e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&size=400&background=random`;
                           }}
                         />
                       ) : (
-                        <div className="w-full h-60 bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center">
-                          <span className="text-white text-6xl font-bold">{user.name.charAt(0)}</span>
+                        <div className="flex h-48 w-full items-center justify-center bg-gradient-to-br from-indigo-400 via-purple-500 to-fuchsia-500">
+                          <span className="text-5xl font-bold text-white">{user.name.charAt(0)}</span>
                         </div>
                       )}
                       
@@ -562,9 +573,18 @@ const FindMatches: React.FC = () => {
                     </div>
                     
                     {/* Profile Details */}
-                    <div className="p-5">
-                      <h3 className="text-xl font-bold text-gray-800">{user.name}, {user.age}</h3>
+                    <div className="p-4 sm:p-5">
+                      <h3 className="text-lg font-bold tracking-tight text-gray-800">{user.name}, {user.age}</h3>
                       {renderVerificationBadges(user)}
+                      {viewMode === 'recommended' && user.recommendation_reasons && user.recommendation_reasons.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {user.recommendation_reasons.map((reason) => (
+                            <span key={reason} className="rounded-full bg-pink-50 px-2 py-1 text-xs font-medium text-pink-700">
+                              {reason}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       
                       <div className="mt-2 text-sm text-gray-600 space-y-1">
                         {user.location && (
@@ -609,7 +629,7 @@ const FindMatches: React.FC = () => {
                         {/* View Overview Button */}
                         <button
                           onClick={() => setSelectedUser(user)}
-                          className="w-full bg-indigo-100 hover:bg-indigo-200 text-indigo-700 py-2 px-4 rounded-md font-medium transition-colors flex items-center justify-center gap-2"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-50 px-4 py-2.5 font-medium text-purple-700 transition-colors hover:bg-purple-100"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

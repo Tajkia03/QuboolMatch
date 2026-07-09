@@ -2,9 +2,9 @@ import React, { useEffect, useState } from "react";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { API_BASE_URL } from "../services/api";
-import { Button, Input, Select, Card } from "../components/ui";
 
 const SignUp: React.FC = () => {
+  const ONBOARDING_PENDING_KEY = "verificationOnboardingPending";
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -15,6 +15,7 @@ const SignUp: React.FC = () => {
     religion: "",
   });
   const [ageRange, setAgeRange] = useState({ from: "", to: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -22,7 +23,8 @@ const SignUp: React.FC = () => {
 
   useEffect(() => {
     if (isAuthReady && isLoggedIn) {
-      navigate("/", { replace: true });
+      const onboardingPending = localStorage.getItem(ONBOARDING_PENDING_KEY) === "true";
+      navigate(onboardingPending ? "/nid-verification" : "/", { replace: true });
     }
   }, [isAuthReady, isLoggedIn, navigate]);
 
@@ -102,6 +104,7 @@ const SignUp: React.FC = () => {
       const data = await response.json();
       
       // Log the user in with the real token
+      localStorage.setItem(ONBOARDING_PENDING_KEY, "true");
       login(data.access_token);
       
       // Navigate directly to NID verification page
@@ -114,151 +117,177 @@ const SignUp: React.FC = () => {
     }
   };
 
-  return (
-    isAuthReady && isLoggedIn ? (
-      <Navigate to="/" replace />
-    ) : (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-accent-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="w-full max-w-2xl">
-        {/* Logo & Header */}
-        <div className="text-center mb-8 animate-fade-in">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-600 to-accent-600 rounded-2xl shadow-lg mb-4">
-            <span className="text-white font-bold text-2xl">Q</span>
-          </div>
-          <h2 className="text-3xl font-heading font-bold bg-gradient-to-r from-primary-700 to-accent-700 bg-clip-text text-transparent">
-            Create Your Account
-          </h2>
-          <p className="mt-2 text-gray-600">
-            Start your journey to find your perfect match
+  return isAuthReady && isLoggedIn ? (
+    <Navigate to="/" replace />
+  ) : (
+    <div className="auth-animated-page flex min-h-screen items-center justify-center px-4 py-24 sm:px-6 lg:px-8">
+      <div className="auth-aurora" />
+      <div className="auth-grid" />
+      <div className="auth-orb auth-orb-one" />
+      <div className="auth-orb auth-orb-two" />
+      <div className="auth-orb auth-orb-three" />
+      <div className="auth-ring auth-ring-one" />
+      <div className="auth-ring auth-ring-two" />
+      <div className="auth-symbol auth-symbol-one">♡</div>
+      <div className="auth-symbol auth-symbol-two">✦</div>
+      <div className="auth-symbol auth-symbol-three">♡</div>
+      <div className="auth-symbol auth-symbol-four">✧</div>
+      <div className="auth-symbol auth-symbol-five">♡</div>
+
+      <Link to="/#home" className="absolute left-5 top-5 z-10 flex items-center gap-3 font-bold text-[#633449] sm:left-10 sm:top-7">
+        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-[#b95777] to-[#71384e] text-white shadow-[0_13px_30px_rgba(128,54,78,0.19)]">Q</span>
+        <span>Qubool Match</span>
+      </Link>
+      <Link to="/#home" className="absolute right-5 top-8 z-10 hidden text-sm font-semibold text-[#7c5a62] hover:text-[#b95777] sm:block">
+        ← Back to home
+      </Link>
+
+      <div className="auth-enter relative z-[2] grid w-full max-w-6xl items-center gap-8 lg:grid-cols-[0.75fr_1.25fr]">
+        <aside className="hidden px-4 text-[#563442] lg:block">
+          <span className="inline-flex rounded-full border border-white/70 bg-white/55 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-[#8c3d5b] shadow-[0_12px_30px_rgba(112,53,75,0.07)]">
+            Private • Verified • Meaningful
+          </span>
+          <h1 className="mt-5 font-heading text-6xl font-bold leading-[0.96] tracking-[-0.04em] text-[#3c2731]">
+            Begin with trust, continue with <span className="text-[#b95777]">intention.</span>
+          </h1>
+          <p className="mt-5 max-w-md leading-7 text-[#705f5b]">
+            Create your profile with the essentials first. After that, we guide you into verification.
           </p>
-        </div>
+        </aside>
 
-        {/* Sign Up Card */}
-        <Card className="animate-slide-up" padding="lg">
+        <section className="auth-card-glass relative w-full rounded-[2rem] p-6 sm:p-8">
+          <div className="mb-6 text-center">
+            <div className="auth-bob mx-auto mb-4 grid h-16 w-16 place-items-center rounded-[1.35rem] bg-gradient-to-br from-[#b95777] to-[#7b3d54] text-2xl font-black text-white shadow-[0_16px_34px_rgba(135,52,78,0.19)]">
+              Q
+            </div>
+            <h2 className="font-heading text-4xl font-bold text-[#3b2731]">Create your account</h2>
+            <p className="mt-2 text-sm text-[#7c6b67]">Start your journey to find a thoughtful match.</p>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Name */}
-            <Input
-              type="text"
-              name="name"
-              label="Full Name"
-              placeholder="Enter your full name"
-              value={formData.name}
-              onChange={handleInputChange}
-              required
-              icon={
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              }
-            />
-
-            {/* Email & Password Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <Input
-                type="email"
-                name="email"
-                label="Email Address"
-                placeholder="your@email.com"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                  </svg>
-                }
-              />
-
-              <Input
-                type="password"
-                name="password"
-                label="Password"
-                placeholder="Create a strong password"
-                value={formData.password}
-                onChange={handleInputChange}
-                required
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                }
-              />
-            </div>
-
-            {/* Gender & Age Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <Select
-                name="gender"
-                label="Gender"
-                value={formData.gender}
-                onChange={handleInputChange}
-                required
-                options={[
-                  { value: "", label: "Select Gender" },
-                  { value: "Male", label: "Male" },
-                  { value: "Female", label: "Female" },
-                  { value: "Other", label: "Other" },
-                ]}
-              />
-
-              <Input
-                type="number"
-                name="age"
-                label="Age"
-                placeholder="Your age"
-                value={formData.age}
-                min={18}
-                max={99}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-
-            {/* NID & Religion Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <Input
-                type="text"
-                name="nid"
-                label="National ID (NID)"
-                placeholder="Enter your NID number"
-                value={formData.nid}
-                onChange={handleInputChange}
-                required
-                icon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
-                  </svg>
-                }
-              />
-
-              <Input
-                type="text"
-                name="religion"
-                label="Religion (Optional)"
-                placeholder="Your religion"
-                value={formData.religion}
-                onChange={handleInputChange}
-              />
-            </div>
-
-            {/* Preferred Age Range */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Preferred Age Range
-              </label>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#5f514d]" htmlFor="signup-name">Full name</label>
+              <input
+                id="signup-name"
+                type="text"
+                name="name"
+                className="auth-input"
+                placeholder="Enter your full name"
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#5f514d]" htmlFor="signup-email">Email address</label>
+                <input
+                  id="signup-email"
+                  type="email"
+                  name="email"
+                  className="auth-input"
+                  placeholder="your@email.com"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#5f514d]" htmlFor="signup-password">Password</label>
+                <div className="relative">
+                  <input
+                    id="signup-password"
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    className="auth-input pr-16"
+                    placeholder="Create a strong password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    required
+                  />
+                  <button type="button" onClick={() => setShowPassword((prev) => !prev)} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#8b7178] hover:text-[#b95777]">
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#5f514d]" htmlFor="signup-gender">Gender</label>
+                <select id="signup-gender" name="gender" className="auth-input" value={formData.gender} onChange={handleInputChange} required>
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#5f514d]" htmlFor="signup-age">Age</label>
+                <input
+                  id="signup-age"
+                  type="number"
+                  name="age"
+                  className="auth-input"
+                  placeholder="Your age"
+                  value={formData.age}
+                  min={18}
+                  max={99}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#5f514d]" htmlFor="signup-nid">National ID (NID)</label>
+                <input
+                  id="signup-nid"
+                  type="text"
+                  name="nid"
+                  className="auth-input"
+                  placeholder="Enter your NID number"
+                  value={formData.nid}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#5f514d]" htmlFor="signup-religion">Religion <span className="normal-case text-[#9b8b86]">(Optional)</span></label>
+                <input
+                  id="signup-religion"
+                  type="text"
+                  name="religion"
+                  className="auth-input"
+                  placeholder="Your religion"
+                  value={formData.religion}
+                  onChange={handleInputChange}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#5f514d]">Preferred age range</label>
               <div className="grid grid-cols-2 gap-4">
-                <Input
+                <input
                   type="number"
                   name="from"
+                  className="auth-input"
                   placeholder="From"
                   value={ageRange.from}
                   min={18}
                   max={99}
                   onChange={handleAgeRangeChange}
                 />
-                <Input
+                <input
                   type="number"
                   name="to"
+                  className="auth-input"
                   placeholder="To"
                   value={ageRange.to}
                   min={18}
@@ -268,41 +297,30 @@ const SignUp: React.FC = () => {
               </div>
             </div>
 
-            {/* Error Message */}
+            <div className="rounded-2xl bg-[#fff4ed] p-3 text-sm leading-6 text-[#705f5b]">
+              <b className="text-[#7b3d54]">Next step:</b> after account creation, we will guide you to NID verification.
+            </div>
+
             {error && (
-              <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-lg animate-scale-in">
-                <div className="flex items-center">
-                  <svg className="w-5 h-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                  <span className="text-red-700 text-sm font-medium">{error}</span>
-                </div>
+              <div className="rounded-2xl border border-red-200 bg-red-50/90 p-4 text-sm font-medium text-red-700">
+                {error}
               </div>
             )}
 
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              isLoading={loading}
-              className="w-full"
-            >
-              {loading ? "Creating Account..." : "Create Account"}
-            </Button>
+            <button type="submit" disabled={loading} className="auth-submit w-full rounded-2xl bg-gradient-to-r from-[#b95777] to-[#7b3d54] px-5 py-4 font-bold text-white disabled:cursor-not-allowed disabled:opacity-70">
+              <span className="relative z-[1]">{loading ? "Creating Account..." : "Create Account"}</span>
+            </button>
           </form>
-        </Card>
 
-        {/* Sign In Link */}
-        <p className="text-center text-gray-600 mt-6 animate-fade-in">
-          Already have an account?{" "}
-          <Link to="/signin" className="text-primary-600 hover:text-primary-700 font-semibold">
-            Sign In
-          </Link>
-        </p>
+          <p className="mt-6 text-center text-sm text-[#71635f]">
+            Already have an account?{" "}
+            <Link to="/signin" className="font-bold text-[#9d3d5e] hover:underline">
+              Sign In
+            </Link>
+          </p>
+        </section>
       </div>
     </div>
-    )
   );
 };
 

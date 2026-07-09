@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Qubool Match — Background Animation Sign In Demo</title>
+<style>
+*{box-sizing:border-box}
+:root{--cream:#fffaf6;--rose:#b95777;--rose-dark:#7b3d54;--plum:#34242d;--muted:#766864;--gold:#d9a96f}
+body{margin:0;min-height:100vh;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--plum);background:linear-gradient(135deg,#fff8f2 0%,#f7e7e4 45%,#fff3e3 100%);overflow:hidden}
+button,input{font:inherit}
+.page{position:relative;display:grid;min-height:100vh;place-items:center;padding:34px 18px;overflow:hidden}
+.aurora{position:absolute;inset:-20%;background:radial-gradient(circle at 18% 24%,#ffc8d6 0 10%,transparent 28%),radial-gradient(circle at 82% 18%,#eed0aa 0 9%,transparent 25%),radial-gradient(circle at 76% 82%,#d7b2ef 0 8%,transparent 26%),radial-gradient(circle at 22% 84%,#ffd9c8 0 11%,transparent 28%);filter:blur(24px);opacity:.8;animation:aurora 16s ease-in-out infinite alternate}
+.mesh{position:absolute;inset:0;background-image:linear-gradient(#7b3d5409 1px,transparent 1px),linear-gradient(90deg,#7b3d5409 1px,transparent 1px);background-size:42px 42px;mask-image:radial-gradient(circle at center,#000 0 44%,transparent 76%);animation:mesh 10s linear infinite}
+.orb{position:absolute;border-radius:999px;filter:blur(.2px);opacity:.65}
+.orb.one{width:260px;height:260px;left:8%;top:14%;background:linear-gradient(145deg,#fff8,#efb1c3);animation:float 9s ease-in-out infinite}
+.orb.two{width:180px;height:180px;right:10%;bottom:14%;background:linear-gradient(145deg,#fff8,#e5bd88);animation:float 8s -2s ease-in-out infinite}
+.orb.three{width:96px;height:96px;right:22%;top:17%;background:linear-gradient(145deg,#fff8,#cda3df);animation:float 7s -1s ease-in-out infinite}
+.ring{position:absolute;border:1px solid #8e456029;border-radius:999px}
+.ring.one{width:520px;height:520px;left:-175px;bottom:-175px;animation:spin 32s linear infinite}
+.ring.two{width:360px;height:360px;right:-90px;top:-90px;animation:spin 28s linear reverse infinite}
+.ring:before,.ring:after{content:'';position:absolute;width:10px;height:10px;border-radius:50%;background:#b95777;box-shadow:0 0 0 7px #b9577717}
+.ring:before{left:22%;top:5%}.ring:after{right:10%;bottom:25%;background:#d9a96f}
+.symbol{position:absolute;color:#8e45602b;font-family:Georgia,serif;font-weight:700;animation:rise 12s linear infinite}
+.symbol.s1{left:14%;bottom:-30px;font-size:46px;animation-delay:0s}
+.symbol.s2{left:75%;bottom:-35px;font-size:30px;animation-delay:2.5s}
+.symbol.s3{left:88%;bottom:-40px;font-size:54px;animation-delay:5s}
+.symbol.s4{left:30%;bottom:-35px;font-size:28px;animation-delay:7s}
+.brand{position:absolute;left:clamp(18px,4vw,54px);top:28px;z-index:5;display:flex;align-items:center;gap:11px;color:#633449;font-weight:900}
+.brand-mark{display:grid;width:42px;height:42px;place-items:center;border-radius:14px;color:#fff;background:linear-gradient(145deg,#aa4164,#71384e);box-shadow:0 12px 28px #80364e2f}
+.demo-label{position:absolute;right:18px;bottom:18px;z-index:5;padding:8px 12px;border-radius:999px;color:#fff;background:#34242dde;font-size:11px;box-shadow:0 10px 28px #0002}
+.signin{position:relative;z-index:3;width:min(462px,100%);animation:enter .75s cubic-bezier(.2,.8,.2,1) both}
+.headline{text-align:center;margin-bottom:20px}
+.headline .mini-mark{display:grid;place-items:center;width:68px;height:68px;margin:0 auto 17px;border-radius:22px;color:#fff;background:linear-gradient(145deg,#b95777,#7b3d54);box-shadow:0 18px 42px #87344e33;font-size:28px;font-weight:950;animation:gentleBob 4.8s ease-in-out infinite}
+.headline h1{margin:0;font:700 clamp(35px,7vw,48px)/1.05 Georgia,serif;letter-spacing:-1.5px;color:#3b2731}
+.headline p{margin:10px 0 0;color:#7c6b67;line-height:1.6}
+.card{position:relative;padding:30px;border:1px solid #ffffffc9;border-radius:30px;background:linear-gradient(145deg,#fffffff0,#fff8f1cf);box-shadow:0 28px 80px #73364f24,inset 0 1px 0 #fff;backdrop-filter:blur(22px)}
+.card:before{content:'';position:absolute;inset:-1px;border-radius:30px;padding:1px;background:linear-gradient(135deg,#fff,#d077943d,#f0c47b3d,#fff);mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;pointer-events:none}
+.field{margin-bottom:17px}
+.field label{display:block;margin-bottom:7px;color:#5f514d;font-size:12px;font-weight:850}
+.input-wrap{position:relative}
+.input-wrap svg{position:absolute;left:14px;top:50%;width:19px;transform:translateY(-50%);color:#a9808a}
+.input-wrap input{width:100%;border:1px solid #ead7d2;border-radius:15px;padding:14px 46px;color:#34242d;background:#fffbf8;outline:none;transition:.22s ease}
+.input-wrap input:focus{border-color:#b95777;box-shadow:0 0 0 5px #b9577718;transform:translateY(-1px);background:#fff}
+.toggle{position:absolute;right:9px;top:50%;transform:translateY(-50%);border:0;padding:7px;color:#8b7178;background:transparent;cursor:pointer;font-size:12px;font-weight:800}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-2px 0 20px;color:#786966;font-size:12px}
+.remember{display:flex;align-items:center;gap:7px}.remember input{accent-color:#b95777}
+.forgot{color:#9d3d5e;text-decoration:none;font-weight:850}.forgot:hover{text-decoration:underline}
+.submit{position:relative;overflow:hidden;width:100%;border:0;border-radius:15px;padding:14px;color:white;background:linear-gradient(100deg,#b95777,#7b3d54);box-shadow:0 14px 30px #88415938;font-weight:900;cursor:pointer;transition:.25s ease}
+.submit:before{content:'';position:absolute;inset:0;transform:translateX(-110%);background:linear-gradient(90deg,transparent,#ffffff40,transparent);transition:.6s}
+.submit:hover{transform:translateY(-2px);box-shadow:0 18px 36px #8841594a}.submit:hover:before{transform:translateX(110%)}
+.divider{display:flex;align-items:center;gap:12px;margin:22px 0;color:#9b8b86;font-size:11px;font-weight:800;letter-spacing:.8px}.divider:before,.divider:after{content:'';height:1px;flex:1;background:#eadbd6}
+.trust{display:grid;grid-template-columns:36px 1fr;gap:10px;align-items:center;padding:12px;border-radius:16px;background:#f8ece7;color:#6d5e5a;font-size:12px;line-height:1.45}.trust b{display:block;color:#5b3444}.trust-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;color:#9d3d5e;background:#fff}
+.signup{text-align:center;margin:20px 0 0;color:#71635f;font-size:13px}.signup a{color:#9d3d5e;font-weight:900;text-decoration:none}
+.back{display:block;margin-top:18px;text-align:center;color:#7d6d68;text-decoration:none;font-size:12px;font-weight:800}.back:hover{color:#9d3d5e}
+@keyframes enter{from{opacity:0;transform:translateY(26px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes gentleBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+@keyframes float{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(24px,-20px) scale(1.04)}}
+@keyframes aurora{0%{transform:translate(-2%,0) rotate(0deg) scale(1)}100%{transform:translate(2%,-2%) rotate(8deg) scale(1.06)}}
+@keyframes mesh{to{background-position:42px 42px}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes rise{0%{transform:translateY(0) rotate(0);opacity:0}12%{opacity:.55}100%{transform:translateY(-115vh) rotate(45deg);opacity:0}}
+@media(max-width:640px){body{overflow:auto}.page{min-height:100svh;padding:92px 14px 34px}.brand{left:18px;top:18px}.card{padding:24px;border-radius:24px}.headline .mini-mark{width:60px;height:60px}.row{align-items:flex-start;flex-direction:column}.demo-label{display:none}.orb.one{left:-120px}.orb.two{right:-70px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="aurora"></div>
+  <div class="mesh"></div>
+  <div class="orb one"></div>
+  <div class="orb two"></div>
+  <div class="orb three"></div>
+  <div class="ring one"></div>
+  <div class="ring two"></div>
+  <div class="symbol s1">♡</div>
+  <div class="symbol s2">✦</div>
+  <div class="symbol s3">♡</div>
+  <div class="symbol s4">✧</div>
+
+  <div class="brand"><span class="brand-mark">Q</span><span>Qubool Match</span></div>
+
+  <section class="signin" aria-label="Sign in form">
+    <div class="headline">
+      <div class="mini-mark">Q</div>
+      <h1>Welcome back</h1>
+      <p>Sign in to continue your thoughtful match journey.</p>
+    </div>
+
+    <form class="card" onsubmit="event.preventDefault()">
+      <div class="field">
+        <label for="email">Email address</label>
+        <div class="input-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/></svg>
+          <input id="email" type="email" placeholder="Enter your email" required>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <div class="input-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          <input id="password" type="password" placeholder="Enter your password" required>
+          <button class="toggle" type="button" aria-label="Show password">Show</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label class="remember"><input type="checkbox"> Remember me</label>
+        <a class="forgot" href="#">Forgot password?</a>
+      </div>
+
+      <button class="submit" type="submit">Sign in</button>
+
+      <div class="divider">SECURE ACCESS</div>
+      <div class="trust">
+        <span class="trust-icon">◇</span>
+        <span><b>Private and protected</b>Your profile, preferences, and match activity stay secure.</span>
+      </div>
+
+      <p class="signup">New to Qubool Match? <a href="#">Create your profile</a></p>
+    </form>
+
+    <a class="back" href="#">← Back to homepage</a>
+  </section>
+
+  <div class="demo-label">Animated background sign-in concept</div>
+</main>
+<script>
+const toggle=document.querySelector('.toggle'),password=document.querySelector('#password');
+toggle.onclick=()=>{const hidden=password.type==='password';password.type=hidden?'text':'password';toggle.textContent=hidden?'Hide':'Show';toggle.setAttribute('aria-label',hidden?'Hide password':'Show password')};
+</script>
+</body>
+</html>

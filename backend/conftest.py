@@ -1,7 +1,11 @@
+import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key")
+
 from main import app
 from database import Base, get_db
 from config import get_settings
@@ -9,6 +13,18 @@ from unittest.mock import patch, MagicMock
 
 # Configure test database connection
 DATABASE = f"{get_settings().DATABASE_URL}{get_settings().DATABASE_NAME}"
+DATABASE_NAME = get_settings().DATABASE_NAME
+
+# Never allow pytest's create/drop lifecycle to point at an application
+# database.  Set ENV=test and use a database whose name clearly ends in
+# "_test" before running the suite.
+if not DATABASE_NAME.lower().endswith("_test"):
+    raise RuntimeError(
+        f"Refusing to run destructive pytest fixtures against database "
+        f"'{DATABASE_NAME}'. Set ENV=test and DATABASE_NAME to a dedicated "
+        "database ending in '_test'."
+    )
+
 engine = create_engine(DATABASE)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

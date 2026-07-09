@@ -360,4 +360,6 @@ def seed(limit=LIMIT):
 
 
 if __name__ == "__main__":
-    seed(LIMIT)
+    # Backward-compatible entry point for the current 500-profile data set.
+    from seed_recommendation_data import main
+    main()

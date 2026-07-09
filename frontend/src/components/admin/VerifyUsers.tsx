@@ -3,18 +3,28 @@ import { API_BASE_URL } from '../../services/api';
 
 interface PendingUser {
   id: string;
+  name?: string | null;
+  age?: number | null;
+  date_of_birth?: string | null;
+  nid?: string | null;
   email: string;
   verification_status: string;
   guardian_verification_status: string;
-  verification_date: string | null;
-  verification_time: string | null;
   has_nid_image: boolean;
   nid_image_filename: string | null;
-  has_recent_image: boolean;
-  recent_image_filename: string | null;
   verification_notes: string | null;
   created_at: string;
-  matching_percentage: number | null;
+  ocr_name_match_status?: string | null;
+  ocr_nid_match?: boolean | null;
+  ocr_dob_match?: boolean | null;
+  ocr_confirmed?: boolean | null;
+  ocr_name?: string | null;
+  ocr_father_name?: string | null;
+  ocr_mother_name?: string | null;
+  ocr_date_of_birth?: string | null;
+  ocr_nid_number?: string | null;
+  ocr_image_quality?: string | null;
+  ocr_warnings?: string[] | null;
 }
 
 interface PendingVerificationsResponse {
@@ -26,8 +36,9 @@ const VerifyUsers: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [processingUserId, setProcessingUserId] = useState<string | null>(null);
-  const [matchingUserId, setMatchingUserId] = useState<string | null>(null);
   const [guardianProcessingUserId, setGuardianProcessingUserId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<PendingUser | null>(null);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   useEffect(() => {
     fetchPendingUsers();
@@ -49,10 +60,10 @@ const VerifyUsers: React.FC = () => {
 
       const data: PendingVerificationsResponse = await response.json();
       
-      // Sort by verification_date (most recent first)
+      // Sort by creation time (most recent first)
       const sortedUsers = data.pending_verifications.sort((a, b) => {
-        const dateA = new Date(a.verification_date || a.created_at);
-        const dateB = new Date(b.verification_date || b.created_at);
+        const dateA = new Date(a.created_at);
+        const dateB = new Date(b.created_at);
         return dateB.getTime() - dateA.getTime();
       });
       
@@ -61,6 +72,15 @@ const VerifyUsers: React.FC = () => {
       setError(error instanceof Error ? error.message : 'Failed to fetch pending users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const readErrorMessage = async (response: Response, fallback: string) => {
+    try {
+      const payload = await response.json();
+      return payload?.detail || payload?.message || fallback;
+    } catch {
+      return fallback;
     }
   };
 
@@ -77,16 +97,18 @@ const VerifyUsers: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to verify user');
+        throw new Error(await readErrorMessage(response, 'Failed to verify user'));
       }
 
       // Remove the user from pending list
       setPendingUsers(prev => prev.filter(user => user.id !== userId));
-      
+
       // Show success message (you can add a toast notification here)
       alert('User verified successfully!');
+      return true;
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to verify user');
+      return false;
     } finally {
       setProcessingUserId(null);
     }
@@ -94,7 +116,7 @@ const VerifyUsers: React.FC = () => {
 
   const handleRejectUser = async (userId: string) => {
     const rejectionNotes = prompt('Please enter rejection reason:');
-    if (!rejectionNotes) return;
+    if (!rejectionNotes) return false;
 
     setProcessingUserId(userId);
     try {
@@ -111,16 +133,18 @@ const VerifyUsers: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to reject user');
+        throw new Error(await readErrorMessage(response, 'Failed to reject user'));
       }
 
       // Remove the user from pending list
       setPendingUsers(prev => prev.filter(user => user.id !== userId));
-      
+
       // Show success message
       alert('User verification rejected successfully!');
+      return true;
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to reject user');
+      return false;
     } finally {
       setProcessingUserId(null);
     }
@@ -139,7 +163,7 @@ const VerifyUsers: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to approve guardian verification');
+        throw new Error(await readErrorMessage(response, 'Failed to approve guardian verification'));
       }
 
       setPendingUsers(prev => prev.map(user =>
@@ -167,7 +191,7 @@ const VerifyUsers: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to reject guardian verification');
+        throw new Error(await readErrorMessage(response, 'Failed to reject guardian verification'));
       }
 
       setPendingUsers(prev => prev.map(user =>
@@ -205,68 +229,6 @@ const VerifyUsers: React.FC = () => {
     }
   };
 
-  const viewRecentImage = async (userId: string) => {
-    try {
-      const token = localStorage.getItem('adminAccessToken');
-      const response = await fetch(`${API_BASE_URL}/verification/recent-image/${userId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch recent image');
-      }
-
-      const blob = await response.blob();
-      const imageUrl = URL.createObjectURL(blob);
-      
-      // Open image in new window
-      window.open(imageUrl, '_blank');
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to view recent image');
-    }
-  };
-
-  const handleMatchImages = async (userId: string) => {
-    setMatchingUserId(userId);
-    try {
-      const token = localStorage.getItem('adminAccessToken');
-      const response = await fetch(`${API_BASE_URL}/verification/match-images/${userId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to match images');
-      }
-
-      const data = await response.json();
-
-      if (!data.success) {
-        alert(`Error: ${data.error}`);
-        return;
-      }
-
-      // Update the user's matching percentage in the state
-      setPendingUsers(prev => prev.map(user => 
-        user.id === userId 
-          ? { ...user, matching_percentage: data.matchingPercentage }
-          : user
-      ));
-
-      // Show success message
-      alert(`Match successful! Matching percentage: ${data.matchingPercentage.toFixed(1)}%`);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to match images');
-    } finally {
-      setMatchingUserId(null);
-    }
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -275,11 +237,141 @@ const VerifyUsers: React.FC = () => {
     });
   };
 
-  const formatTime = (timeString: string) => {
-    return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
+  const getCredentialCheckLabel = (user: PendingUser) => {
+    const nameMatch = user.ocr_name_match_status
+      ? ['matched', 'match', 'true', 'yes', 'approved'].includes(user.ocr_name_match_status.toLowerCase())
+      : false;
+    const nidMatch = Boolean(user.ocr_nid_match);
+    const dobMatch = Boolean(user.ocr_dob_match);
+
+    const hasAnyProcessedSignal =
+      user.ocr_confirmed !== undefined ||
+      user.ocr_name_match_status !== undefined ||
+      user.ocr_nid_match !== undefined ||
+      user.ocr_dob_match !== undefined;
+
+    if (!hasAnyProcessedSignal) {
+      return 'Not Processed';
+    }
+
+    const matchedCount = [nameMatch, nidMatch, dobMatch].filter(Boolean).length;
+
+    if (matchedCount === 0) {
+      return 'Not Processed';
+    }
+
+    return `${matchedCount}/3 Matched`;
+  };
+
+  const openReviewDetails = (user: PendingUser) => {
+    setSelectedUser(user);
+    setIsReviewOpen(true);
+  };
+
+  const closeReviewDetails = () => {
+    setIsReviewOpen(false);
+    setSelectedUser(null);
+  };
+
+  const handleApproveComparison = async () => {
+    if (!selectedUser) {
+      return;
+    }
+
+    const success = await handleVerifyUser(selectedUser.id);
+    if (success) {
+      closeReviewDetails();
+    }
+  };
+
+  const handleRejectComparison = async () => {
+    if (!selectedUser) {
+      return;
+    }
+
+    const success = await handleRejectUser(selectedUser.id);
+    if (success) {
+      closeReviewDetails();
+    }
+  };
+
+  const formatMaybeDate = (value: string | null | undefined) => {
+    if (!value) {
+      return 'Not available';
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+
+    return parsed.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
     });
+  };
+
+  const maskNidNumber = (value: string | null | undefined) => {
+    if (!value) {
+      return 'Not available';
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return 'Not available';
+    }
+
+    return trimmed.replace(/\d(?=\d{4})/g, '*');
+  };
+
+  const getComparisonBadge = (value: string | boolean | null | undefined) => {
+    if (value === null || value === undefined || value === '') {
+      return {
+        label: 'Not Available',
+        className: 'bg-gray-100 text-gray-700',
+      };
+    }
+
+    if (typeof value === 'boolean') {
+      return value
+        ? {
+            label: 'Matched',
+            className: 'bg-green-100 text-green-800',
+          }
+        : {
+            label: 'Does Not Match',
+            className: 'bg-red-100 text-red-800',
+          };
+    }
+
+    const normalized = value.toLowerCase().trim();
+
+    if (['matched', 'match', 'true', 'yes', 'approved'].includes(normalized)) {
+      return {
+        label: 'Matched',
+        className: 'bg-green-100 text-green-800',
+      };
+    }
+
+    if (['needs_review', 'needs review', 'review', 'pending', 'partial', 'uncertain'].includes(normalized)) {
+      return {
+        label: 'Needs Review',
+        className: 'bg-yellow-100 text-yellow-800',
+      };
+    }
+
+    if (['does_not_match', 'does not match', 'not_matched', 'mismatch', 'rejected', 'false', 'no'].includes(normalized)) {
+      return {
+        label: 'Does Not Match',
+        className: 'bg-red-100 text-red-800',
+      };
+    }
+
+    return {
+      label: 'Not Available',
+      className: 'bg-gray-100 text-gray-700',
+    };
   };
 
   if (loading) {
@@ -326,25 +418,16 @@ const VerifyUsers: React.FC = () => {
                   User
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Verification Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   NID Document
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Recent Image
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Match
+                  Credential Check
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Guardian Verified
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
                 </th>
               </tr>
             </thead>
@@ -357,14 +440,6 @@ const VerifyUsers: React.FC = () => {
                       <div className="text-sm text-gray-500">
                         Registered: {formatDate(user.created_at)}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">
-                      {user.verification_date ? formatDate(user.verification_date) : 'Not set'}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {user.verification_time ? formatTime(user.verification_time) : ''}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -385,41 +460,29 @@ const VerifyUsers: React.FC = () => {
                         View NID Image
                       </button>
                     ) : (
-                      <span className="text-gray-400 text-sm">No image</span>
+                        <span className="text-gray-400 text-sm">No image</span>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {user.has_recent_image ? (
+                    <div className="flex flex-col items-start gap-2">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        getCredentialCheckLabel(user) === 'Not Processed'
+                          ? 'bg-gray-100 text-gray-700'
+                          : getCredentialCheckLabel(user) === '3/3 Matched'
+                          ? 'bg-green-100 text-green-800'
+                          : getCredentialCheckLabel(user) === '2/3 Matched'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-orange-100 text-orange-800'
+                      }`}>
+                        {getCredentialCheckLabel(user)}
+                      </span>
                       <button
-                        onClick={() => viewRecentImage(user.id)}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        type="button"
+                        onClick={() => openReviewDetails(user)}
+                        className="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
                       >
-                        View Recent Image
+                        Credential Comparison
                       </button>
-                    ) : (
-                      <span className="text-gray-400 text-sm">No image</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleMatchImages(user.id)}
-                        disabled={matchingUserId === user.id}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {matchingUserId === user.id ? 'Matching...' : 'Match'}
-                      </button>
-                      {user.matching_percentage !== null && user.matching_percentage !== undefined && (
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          user.matching_percentage >= 80 
-                            ? 'bg-green-100 text-green-800'
-                            : user.matching_percentage >= 50
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {user.matching_percentage.toFixed(1)}%
-                        </span>
-                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -451,26 +514,123 @@ const VerifyUsers: React.FC = () => {
                       </button>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                    <button
-                      onClick={() => handleVerifyUser(user.id)}
-                      disabled={processingUserId === user.id}
-                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {processingUserId === user.id ? 'Processing...' : 'Verify'}
-                    </button>
-                    <button
-                      onClick={() => handleRejectUser(user.id)}
-                      disabled={processingUserId === user.id}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {processingUserId === user.id ? 'Processing...' : 'Reject'}
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {isReviewOpen && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-3xl rounded-lg bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">Credential Comparison</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Compare submitted profile data with OCR output returned by the backend.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => viewNIDImage(selectedUser.id)}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                View NID Image
+              </button>
+              <div className="text-sm text-gray-500">
+                {selectedUser.email}
+              </div>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <div className="rounded-lg border border-gray-200 p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-800">Full Name</h4>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Submitted: {selectedUser.name || 'Not available'}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        OCR: {selectedUser.ocr_name || 'Not available'}
+                      </p>
+                    </div>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getComparisonBadge(selectedUser.ocr_name_match_status).className}`}>
+                      {getComparisonBadge(selectedUser.ocr_name_match_status).label}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-800">NID Number</h4>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Submitted: {maskNidNumber(selectedUser.nid)}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        OCR: {maskNidNumber(selectedUser.ocr_nid_number)}
+                      </p>
+                    </div>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getComparisonBadge(selectedUser.ocr_nid_match).className}`}>
+                      {getComparisonBadge(selectedUser.ocr_nid_match).label}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-800">Date of Birth / Age</h4>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Submitted: {formatMaybeDate(selectedUser.date_of_birth)}{selectedUser.age !== null && selectedUser.age !== undefined ? `, Age ${selectedUser.age}` : ''}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        OCR: {formatMaybeDate(selectedUser.ocr_date_of_birth)}
+                      </p>
+                    </div>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getComparisonBadge(selectedUser.ocr_dob_match).className}`}>
+                      {getComparisonBadge(selectedUser.ocr_dob_match).label}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 flex flex-wrap items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleApproveComparison}
+                disabled={processingUserId === selectedUser.id}
+                className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {processingUserId === selectedUser.id ? 'Processing...' : 'Approve'}
+              </button>
+              <button
+                type="button"
+                onClick={handleRejectComparison}
+                disabled={processingUserId === selectedUser.id}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {processingUserId === selectedUser.id ? 'Processing...' : 'Reject'}
+              </button>
+              <button
+                type="button"
+                onClick={closeReviewDetails}
+                className="rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -80,6 +80,15 @@ python migrations/add_profile_page_fields.py
 
 This adds the new profile fields without changing the existing guardian phone number or guardian relation columns.
 
+### Verification Cleanup
+To clean up legacy verification columns from `users`, run:
+
+```bash
+alembic upgrade heads
+```
+
+This applies the migration that removes the legacy verification fields from the table.
+
 ### 4. Applying Migrations
 ```bash
 # Apply to development database
@@ -105,8 +114,6 @@ The current `users` table includes:
 - `nid_image_data`: Binary image data (BYTEA)
 - `nid_image_filename`: Original filename (VARCHAR)
 - `nid_image_content_type`: MIME type (VARCHAR)
-- `verification_date`: Scheduled verification date (DATE)
-- `verification_time`: Scheduled verification time (TIME)
 - `verification_status`: Status (pending/in_progress/verified) (VARCHAR)
 - `verification_notes`: Additional notes (TEXT)
 - `verified_at`: Verification completion timestamp (TIMESTAMP)

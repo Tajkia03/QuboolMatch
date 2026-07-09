@@ -10,25 +10,26 @@ engine = create_engine(get_settings().DATABASE_URL,
 
 
 def create_database():
-    # Connect to PostgreSQL server and create the database
     try:
         with engine.connect() as connection:
             if os.getenv("ENV") == "test":
-                connection.execute(
-                    text(f"DROP DATABASE {get_settings().DATABASE_NAME}"))
-    except Exception as e:
-        print(f"Error: {e}")
+                print("Skipping database bootstrap in test environment.")
+                return
 
-    try:
-        # Connect to PostgreSQL server and create the database
-        with engine.connect() as connection:
-            connection.execute(
-                text(f"CREATE DATABASE {get_settings().DATABASE_NAME}"))
-            print(
-                f"Database '{get_settings().DATABASE_NAME}' created successfully.")
+            db_name = get_settings().DATABASE_NAME
+            exists = connection.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :db_name"),
+                {"db_name": db_name},
+            ).scalar()
+
+            if exists:
+                print(f"Database '{db_name}' already exists. Skipping creation.")
+                return
+
+            connection.execute(text(f"CREATE DATABASE {db_name}"))
+            print(f"Database '{db_name}' created successfully.")
     except Exception as e:
         print(f"Error: {e}")
-        # If the database already exists, this exception will be triggered.
 
 
 # Main execution to create the database and tables

@@ -12,7 +12,9 @@ const Navbar: React.FC = () => {
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
 
   const refreshBadges = async () => {
-    if (!isLoggedIn) {
+    const token = localStorage.getItem('accessToken');
+
+    if (!isLoggedIn || !token) {
       setMessageUnreadCount(0);
       setNotificationUnreadCount(0);
       return;
@@ -87,27 +89,27 @@ const Navbar: React.FC = () => {
   };
 
   return (
-    <nav className="bg-white/90 backdrop-blur-md shadow-soft sticky top-0 z-50 border-b border-gray-100">
+    <nav className="sticky top-0 z-50 border-b border-[#eadbd5] bg-[#fffaf6]/95 shadow-soft backdrop-blur-md">
       <div className="container mx-auto px-4 lg:px-6">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary-600 to-accent-600 rounded-lg flex items-center justify-center shadow-md group-hover:shadow-lg transition-all duration-200">
+          <Link to="/#home" className="group flex items-center space-x-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#a83f62] to-[#75405c] shadow-md transition-all duration-200 group-hover:shadow-lg">
               <span className="text-white font-bold text-xl">Q</span>
             </div>
-            <span className="text-xl font-heading font-bold bg-gradient-to-r from-primary-700 to-accent-700 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-[#7b3650] to-[#a83f62] bg-clip-text font-heading text-xl font-bold text-transparent">
               Qubool Match
             </span>
           </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-1">
-            <NavLink to="/">Home</NavLink>
-            <NavLink to="/about">About</NavLink>
-            <NavLink to="/why-choose-us">Why Us</NavLink>
-            <NavLink to="/services">Services</NavLink>
-            <NavLink to="/testimonials">Testimonials</NavLink>
-            <NavLink to="/contact">Contact</NavLink>
+            <NavLink to="/#home">Home</NavLink>
+            <NavLink to="/#about">About</NavLink>
+            <NavLink to="/#why-choose-us">Why Us</NavLink>
+            <NavLink to="/#services">Services</NavLink>
+            <NavLink to="/#testimonials">Testimonials</NavLink>
+            <NavLink to="/#contact">Contact</NavLink>
             
             {isLoggedIn && (
               <>
@@ -146,7 +148,7 @@ const Navbar: React.FC = () => {
                 </Link>
                 <Link
                   to="/signup"
-                  className="px-5 py-2 rounded-lg bg-gradient-to-r from-primary-600 to-primary-700 text-white font-medium shadow-md hover:shadow-lg hover:from-primary-700 hover:to-primary-800 transition-all duration-200"
+                  className="rounded-lg bg-gradient-to-r from-[#a83f62] to-[#8d3857] px-5 py-2 font-medium text-white shadow-md transition-all duration-200 hover:from-[#963955] hover:to-[#75405c] hover:shadow-lg"
                 >
                   Sign Up
                 </Link>
@@ -178,12 +180,12 @@ const Navbar: React.FC = () => {
         {isMobileMenuOpen && (
           <div className="lg:hidden py-4 border-t border-gray-100 animate-slide-down">
             <div className="flex flex-col space-y-2">
-              <MobileNavLink to="/" onClick={() => setIsMobileMenuOpen(false)}>Home</MobileNavLink>
-              <MobileNavLink to="/about" onClick={() => setIsMobileMenuOpen(false)}>About</MobileNavLink>
-              <MobileNavLink to="/why-choose-us" onClick={() => setIsMobileMenuOpen(false)}>Why Us</MobileNavLink>
-              <MobileNavLink to="/services" onClick={() => setIsMobileMenuOpen(false)}>Services</MobileNavLink>
-              <MobileNavLink to="/testimonials" onClick={() => setIsMobileMenuOpen(false)}>Testimonials</MobileNavLink>
-              <MobileNavLink to="/contact" onClick={() => setIsMobileMenuOpen(false)}>Contact</MobileNavLink>
+              <MobileNavLink to="/#home" onClick={() => setIsMobileMenuOpen(false)}>Home</MobileNavLink>
+              <MobileNavLink to="/#about" onClick={() => setIsMobileMenuOpen(false)}>About</MobileNavLink>
+              <MobileNavLink to="/#why-choose-us" onClick={() => setIsMobileMenuOpen(false)}>Why Us</MobileNavLink>
+              <MobileNavLink to="/#services" onClick={() => setIsMobileMenuOpen(false)}>Services</MobileNavLink>
+              <MobileNavLink to="/#testimonials" onClick={() => setIsMobileMenuOpen(false)}>Testimonials</MobileNavLink>
+              <MobileNavLink to="/#contact" onClick={() => setIsMobileMenuOpen(false)}>Contact</MobileNavLink>
               
               {isLoggedIn && (
                 <>
@@ -218,7 +220,7 @@ const Navbar: React.FC = () => {
                     <Link
                       to="/signup"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="block w-full px-4 py-2.5 rounded-lg text-center bg-gradient-to-r from-primary-600 to-primary-700 text-white font-medium shadow-md hover:shadow-lg transition-all duration-200"
+                      className="block w-full rounded-lg bg-gradient-to-r from-[#a83f62] to-[#8d3857] px-4 py-2.5 text-center font-medium text-white shadow-md transition-all duration-200 hover:shadow-lg"
                     >
                       Sign Up
                     </Link>
@@ -238,7 +240,7 @@ const Navbar: React.FC = () => {
 const NavLink: React.FC<{ to: string; children: React.ReactNode; badgeCount?: number }> = ({ to, children, badgeCount = 0 }) => (
   <Link
     to={to}
-    className="px-3 py-2 rounded-lg text-gray-700 hover:text-primary-700 hover:bg-primary-50 transition-all duration-200 font-medium inline-flex items-center gap-2"
+    className="inline-flex items-center gap-2 rounded-lg px-3 py-2 font-medium text-[#625651] transition-all duration-200 hover:bg-[#f6e5ea] hover:text-[#8d3857]"
   >
     <span>{children}</span>
     {badgeCount > 0 && (
@@ -254,7 +256,7 @@ const MobileNavLink: React.FC<{ to: string; children: React.ReactNode; onClick: 
   <Link
     to={to}
     onClick={onClick}
-    className="px-4 py-2.5 rounded-lg text-gray-700 hover:bg-primary-50 hover:text-primary-700 transition-all duration-200 font-medium inline-flex items-center gap-2"
+    className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 font-medium text-[#625651] transition-all duration-200 hover:bg-[#f6e5ea] hover:text-[#8d3857]"
   >
     <span>{children}</span>
     {badgeCount > 0 && (

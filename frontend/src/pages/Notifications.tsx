@@ -204,34 +204,58 @@ const Notifications: React.FC = () => {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "interest_received":
-        return "💌";
+        return "♡";
       case "interest_accepted":
-        return "✅";
+        return "✓";
       case "interest_rejected":
-        return "❌";
+        return "×";
       case "system":
-        return "🔔";
+        return "!";
       case "new_message":
         return "💬";
       default:
-        return "📬";
+        return "•";
     }
   };
 
-  const getNotificationColor = (type: string) => {
+  const getNotificationTone = (type: string) => {
     switch (type) {
       case "interest_received":
-        return "bg-pink-50 border-pink-200";
+        return {
+          avatar: "from-[#b95777] to-[#7b3d54]",
+          dot: "bg-[#b95777] shadow-[0_0_0_6px_rgba(185,87,119,0.12)]",
+          label: "Interest request",
+        };
       case "interest_accepted":
-        return "bg-green-50 border-green-200";
+        return {
+          avatar: "from-[#86b59a] to-[#4c9069]",
+          dot: "bg-[#66a47d] shadow-[0_0_0_6px_rgba(134,181,154,0.16)]",
+          label: "Accepted",
+        };
       case "interest_rejected":
-        return "bg-red-50 border-red-200";
+        return {
+          avatar: "from-[#d86e8e] to-[#a7485b]",
+          dot: "bg-[#c55768] shadow-[0_0_0_6px_rgba(216,110,142,0.14)]",
+          label: "Interest update",
+        };
       case "system":
-        return "bg-blue-50 border-blue-200";
+        return {
+          avatar: "from-[#d9a96f] to-[#a96951]",
+          dot: "bg-[#d9a96f] shadow-[0_0_0_6px_rgba(217,169,111,0.16)]",
+          label: "System",
+        };
       case "new_message":
-        return "bg-indigo-50 border-indigo-200";
+        return {
+          avatar: "from-[#8fa7d7] to-[#6f7bb0]",
+          dot: "bg-[#7d8fca] shadow-[0_0_0_6px_rgba(143,167,215,0.16)]",
+          label: "Message",
+        };
       default:
-        return "bg-gray-50 border-gray-200";
+        return {
+          avatar: "from-[#b7aaa6] to-[#7b6b67]",
+          dot: "bg-[#b7aaa6] shadow-[0_0_0_6px_rgba(183,170,166,0.15)]",
+          label: "Notification",
+        };
     }
   };
 
@@ -251,175 +275,180 @@ const Notifications: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <div className="container mx-auto px-4 max-w-4xl">
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-gray-800">Notifications</h1>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-              >
-                Mark all as read
-              </button>
-            )}
-          </div>
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#fffaf6] via-[#f8e7e4] to-[#fff0dc] py-10">
+      <div className="pointer-events-none absolute -left-24 top-24 h-72 w-72 rounded-full bg-[#f0b5c5]/50 blur-2xl" />
+      <div className="pointer-events-none absolute -right-20 top-72 h-64 w-64 rounded-full bg-[#e7c28d]/45 blur-2xl" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(123,61,84,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(123,61,84,0.035)_1px,transparent_1px)] bg-[size:42px_42px] [mask-image:radial-gradient(circle_at_center,#000_0_44%,transparent_78%)]" />
 
-          {/* Unread count badge */}
-          {unreadCount > 0 && (
-            <div className="bg-indigo-100 border-l-4 border-indigo-500 p-3 mb-6">
-              <p className="text-sm text-indigo-700">
-                You have <span className="font-bold">{unreadCount}</span> unread notification{unreadCount > 1 ? 's' : ''}
+      <div className="relative z-[1] mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-8 overflow-hidden rounded-[2rem] border border-white/70 bg-white/70 p-6 shadow-[0_24px_70px_rgba(123,61,84,0.10)] backdrop-blur-xl sm:p-8">
+          <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+            <div>
+              <span className="inline-flex rounded-full border border-white/80 bg-white/70 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-[#8c3d5b] shadow-[0_12px_30px_rgba(112,53,75,0.07)]">
+                Notification timeline
+              </span>
+              <h1 className="mt-4 font-heading text-4xl font-bold tracking-[-0.03em] text-[#3b2731] sm:text-5xl">
+                Your latest updates
+              </h1>
+              <p className="mt-3 max-w-2xl leading-7 text-[#73625e]">
+                Follow match activity, messages, and system reminders in a clean timeline.
               </p>
             </div>
-          )}
 
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Notifications List */}
-          {loading ? (
-            <div className="flex justify-center items-center py-20">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
-            </div>
-          ) : notifications.length === 0 ? (
-            <div className="text-center py-16">
-              <svg
-                className="mx-auto h-16 w-16 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                />
-              </svg>
-              <h3 className="mt-4 text-lg font-medium text-gray-900">No notifications</h3>
-              <p className="mt-2 text-sm text-gray-500">
-                You're all caught up! Check back later for updates.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`
-                    border rounded-lg p-4 transition-all duration-200 cursor-pointer
-                    ${getNotificationColor(notification.type)}
-                    ${!notification.is_read ? 'border-l-4' : ''}
-                    hover:shadow-md
-                  `}
-                  onClick={() => handleNotificationClick(notification)}
+            <div className="flex flex-wrap items-center gap-3">
+              <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold ${unreadCount > 0 ? 'bg-[#ffeaf0] text-[#8c3d5b]' : 'bg-[#edf8ef] text-[#62715f]'}`}>
+                {unreadCount > 0 && <span className="h-2 w-2 rounded-full bg-[#b95777]" />}
+                {unreadCount} unread
+              </span>
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="rounded-full bg-gradient-to-r from-[#b95777] to-[#7b3d54] px-5 py-2.5 text-sm font-bold text-white shadow-[0_12px_25px_rgba(136,65,89,0.20)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(136,65,89,0.28)]"
                 >
-                  <div className="flex items-start">
-                    {/* Notification Icon/Avatar */}
-                    <div className="flex-shrink-0 mr-4">
-                      {notification.from_user?.profile_picture ? (
-                        <img
-                          src={notification.from_user.profile_picture}
-                          alt={notification.from_user.name}
-                          className="h-12 w-12 rounded-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(notification.from_user?.name || 'User')}&size=48&background=random`;
-                          }}
-                        />
-                      ) : (
-                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xl font-bold">
-                          {getNotificationIcon(notification.type)}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Notification Content */}
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm ${!notification.is_read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
-                        {notification.message}
-                      </p>
-                      {notification.from_user && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          From: {notification.from_user.name}, {notification.from_user.age}
-                        </p>
-                      )}
-                      <p className="text-xs text-gray-400 mt-1">
-                        {formatTimestamp(notification.created_at)}
-                      </p>
-                    </div>
-
-                    {/* Unread Indicator */}
-                    {!notification.is_read && (
-                      <div className="flex-shrink-0 ml-2">
-                        <div className="h-3 w-3 bg-indigo-600 rounded-full"></div>
-                      </div>
-                    )}
-
-                    {/* Delete Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteNotification(notification.id);
-                      }}
-                      className="flex-shrink-0 ml-4 text-gray-400 hover:text-red-600 transition-colors"
-                      title="Delete notification"
-                    >
-                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {notification.type === 'interest_received' && notification.related_id && !notification.interest_action_status && (
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleInterestAction(notification, 'accept');
-                        }}
-                        disabled={Boolean(actionLoading[notification.id])}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md disabled:opacity-50"
-                      >
-                        {actionLoading[notification.id] ? 'Processing...' : 'Confirm'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleInterestAction(notification, 'reject');
-                        }}
-                        disabled={Boolean(actionLoading[notification.id])}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md disabled:opacity-50"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                  Mark all as read
+                </button>
+              )}
             </div>
-          )}
+          </div>
         </div>
+
+        {error && (
+          <div className="mb-6 rounded-3xl border border-red-200 bg-red-50/90 p-4 text-sm font-medium text-red-700 shadow-sm">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="rounded-[2rem] border border-white/70 bg-white/75 p-16 text-center shadow-[0_24px_70px_rgba(123,61,84,0.10)] backdrop-blur-xl">
+            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[#f0d3dc] border-t-[#b95777]" />
+            <p className="mt-4 font-medium text-[#73625e]">Loading your notifications...</p>
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="rounded-[2rem] border border-white/70 bg-white/75 p-12 text-center shadow-[0_24px_70px_rgba(123,61,84,0.10)] backdrop-blur-xl">
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-[1.5rem] bg-[#fff4ed] text-4xl text-[#b95777]">♡</div>
+            <h3 className="mt-5 font-heading text-2xl font-bold text-[#3b2731]">You’re all caught up</h3>
+            <p className="mt-2 text-sm text-[#73625e]">No notifications right now. Check back later for match updates.</p>
+          </div>
+        ) : (
+          <div className="relative pl-6 sm:pl-8">
+            <div className="absolute bottom-6 left-[0.45rem] top-6 w-px bg-gradient-to-b from-[#e7a8bb] via-[#e9d1c3] to-transparent sm:left-[0.6rem]" />
+
+            <div className="space-y-5">
+              {notifications.map((notification) => {
+                const tone = getNotificationTone(notification.type);
+
+                return (
+                  <article
+                    key={notification.id}
+                    className={`relative rounded-[1.6rem] border p-5 shadow-[0_14px_32px_rgba(123,61,84,0.08)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_22px_45px_rgba(123,61,84,0.14)] ${
+                      notification.is_read
+                        ? 'border-[#ead9d5] bg-[#fffaf6]/85'
+                        : 'border-[#e9a6b9] bg-gradient-to-r from-[#fff2f6] to-[#fffaf6]'
+                    }`}
+                  >
+                    <span className={`absolute -left-[1.9rem] top-8 h-3 w-3 rounded-full sm:-left-[2.15rem] ${notification.is_read ? 'bg-[#cdbbb5]' : tone.dot}`} />
+
+                    <button
+                      type="button"
+                      className="block w-full text-left"
+                      onClick={() => handleNotificationClick(notification)}
+                    >
+                      <div className="flex gap-4">
+                        <div className="flex-shrink-0">
+                          {notification.from_user?.profile_picture ? (
+                            <img
+                              src={notification.from_user.profile_picture}
+                              alt={notification.from_user.name}
+                              className="h-14 w-14 rounded-[1.1rem] object-cover shadow-[0_12px_24px_rgba(136,65,89,0.14)]"
+                              onError={(e) => {
+                                e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(notification.from_user?.name || 'User')}&size=56&background=b95777&color=fff`;
+                              }}
+                            />
+                          ) : (
+                            <div className={`grid h-14 w-14 place-items-center rounded-[1.1rem] bg-gradient-to-br ${tone.avatar} text-xl font-black text-white shadow-[0_12px_24px_rgba(136,65,89,0.16)]`}>
+                              {getNotificationIcon(notification.type)}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-white/75 px-3 py-1 text-xs font-extrabold text-[#7b3d54]">
+                              {tone.label}
+                            </span>
+                            {!notification.is_read && (
+                              <span className="rounded-full bg-[#ffeaf0] px-3 py-1 text-xs font-bold text-[#8c3d5b]">
+                                New
+                              </span>
+                            )}
+                            <span className="text-xs font-medium text-[#9a8a86]">
+                              {formatTimestamp(notification.created_at)}
+                            </span>
+                          </div>
+
+                          <p className={`mt-3 text-sm leading-6 ${notification.is_read ? 'text-[#665956]' : 'font-semibold text-[#3b2731]'}`}>
+                            {notification.message}
+                          </p>
+
+                          {notification.from_user && (
+                            <p className="mt-2 text-xs font-medium text-[#8a7975]">
+                              From: {notification.from_user.name}, {notification.from_user.age}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 pl-0 sm:pl-[4.5rem]">
+                      {notification.type === 'interest_received' && notification.related_id && !notification.interest_action_status ? (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleInterestAction(notification, 'accept');
+                            }}
+                            disabled={Boolean(actionLoading[notification.id])}
+                            className="rounded-full bg-[#e6f8eb] px-4 py-2 text-sm font-bold text-[#1f6f48] transition hover:bg-[#d7f1df] disabled:opacity-50"
+                          >
+                            {actionLoading[notification.id] ? 'Processing...' : 'Confirm'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleInterestAction(notification, 'reject');
+                            }}
+                            disabled={Boolean(actionLoading[notification.id])}
+                            className="rounded-full bg-[#ffe8eb] px-4 py-2 text-sm font-bold text-[#a43245] transition hover:bg-[#ffdce1] disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-medium text-[#9a8a86]">
+                          {notification.is_read ? 'Read notification' : 'Click to open and mark as read'}
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteNotification(notification.id);
+                        }}
+                        className="rounded-full border border-[#ead9d5] bg-white/70 px-3 py-2 text-xs font-bold text-[#8b7470] transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                        title="Delete notification"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

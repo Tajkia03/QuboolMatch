@@ -1,0 +1,13 @@
+{
+  "model_version": 1,
+  "profile_count": 500,
+  "feature_count": 102,
+  "feature_weights": {
+    "numeric": 0.2,
+    "background": 0.3,
+    "lifestyle": 0.2,
+    "household": 0.15,
+    "interests": 0.15
+  },
+  "source_csv": "D:\\BracU\\Project\\project-bolt-sb1-evhchuph\\project\\backend\\recommendation\\quboolmatch_diverse_500_profiles.csv"
+}

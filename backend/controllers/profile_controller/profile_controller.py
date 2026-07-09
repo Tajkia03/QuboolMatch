@@ -7,11 +7,12 @@ from database import get_db
 from repositories.profile_repository.profile_repository import ProfileRepository
 from repositories.block_repository import BlockRepository
 from shared.token import Token
+from models.profile.profile import Profile
 from models.user.user import User
 import json
 import base64
 import re
-from datetime import datetime
+from datetime import date, datetime
 
 router = APIRouter()
 
@@ -84,6 +85,46 @@ def process_base64_file(base64_data: str) -> tuple:
     except Exception as e:
         print(f"Error processing base64 file: {e}")
         return None, None, None
+
+
+def _optional_string(value) -> Optional[str]:
+    return value if isinstance(value, str) else None
+
+
+def _optional_int(value) -> Optional[int]:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _optional_float(value) -> Optional[float]:
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _optional_bool(value) -> Optional[bool]:
+    return value if isinstance(value, bool) else None
+
+
+def _optional_isoformat(value) -> Optional[str]:
+    if not isinstance(value, (date, datetime)):
+        return None
+    return value.isoformat()
+
+
+def _build_profile_response(profile, user: User) -> dict:
+    profile_dict = profile.to_dict()
+    official_age = _optional_int(getattr(user, "age", None))
+
+    return {
+        **profile_dict,
+        "name": _optional_string(getattr(user, "name", None)) or profile_dict.get("name"),
+        "age": official_age if official_age is not None else profile_dict.get("age"),
+        "date_of_birth": _optional_isoformat(getattr(user, "date_of_birth", None)) or profile_dict.get("date_of_birth"),
+        "gender": user.gender,
+        "religion": user.religion,
+        "father_name": _optional_string(getattr(user, "father_name", None)) or profile_dict.get("father_name"),
+        "mother_name": _optional_string(getattr(user, "mother_name", None)) or profile_dict.get("mother_name"),
+        "identity_verified": bool(getattr(user, "identity_verified", False)),
+        "verification_status": user.verification_status,
+    }
 
 
 class ProfileCreate(BaseModel):
@@ -194,6 +235,15 @@ async def create_profile(
         gender = profile_dict.pop("gender", None)
         religion = profile_dict.pop("religion", None)
         # genetic_conditions and necessary_preferences are already strings from frontend
+
+        if user.identity_verified:
+            profile_dict["identity_verified"] = True
+            if user.father_name is not None:
+                profile_dict["father_name"] = user.father_name
+            if user.mother_name is not None:
+                profile_dict["mother_name"] = user.mother_name
+            if user.date_of_birth is not None:
+                profile_dict["date_of_birth"] = user.date_of_birth
         
         # Process base64 files
         if profile_dict.get('profile_picture'):
@@ -217,16 +267,17 @@ async def create_profile(
                 profile_dict['medical_documents_filename'] = filename
                 profile_dict['medical_documents_content_type'] = content_type
         
-        if name is not None:
-            user.name = name
-        if age is not None:
-            user.age = age
-        if date_of_birth:
-            user.date_of_birth = datetime.strptime(date_of_birth, "%Y-%m-%d").date()
-        if gender is not None:
-            user.gender = gender
-        if religion is not None:
-            user.religion = religion
+        if not user.identity_verified:
+            if name is not None:
+                user.name = name
+            if age is not None:
+                user.age = age
+            if date_of_birth:
+                user.date_of_birth = datetime.strptime(date_of_birth, "%Y-%m-%d").date()
+            if gender is not None:
+                user.gender = gender
+            if religion is not None:
+                user.religion = religion
 
         # Create profile
         profile = ProfileRepository.create(db, user_id, **profile_dict)
@@ -234,14 +285,7 @@ async def create_profile(
         return JSONResponse(
             content={
                 "message": "Profile created successfully",
-                "profile": {
-                    **profile.to_dict(),
-                    "name": user.name,
-                    "age": user.age,
-                    "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
-                    "gender": user.gender,
-                    "religion": user.religion,
-                }
+                "profile": _build_profile_response(profile, user)
             },
             status_code=201
         )
@@ -267,19 +311,9 @@ async def get_profile(
         profile = ProfileRepository.get_by_user_id(db, user_id)
         
         if not profile:
-            raise HTTPException(status_code=404, detail="Profile not found")
+            profile = Profile(user_id=user_id)
         
-        return JSONResponse(
-            content={
-                **profile.to_dict(),
-                "name": user.name,
-                "age": user.age,
-                "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
-                "gender": user.gender,
-                "religion": user.religion,
-            },
-            status_code=200
-        )
+        return JSONResponse(content=_build_profile_response(profile, user), status_code=200)
     except HTTPException:
         raise
     except Exception as e:
@@ -303,7 +337,9 @@ async def update_profile(
         profile = ProfileRepository.get_by_user_id(db, user_id)
         
         if not profile:
-            raise HTTPException(status_code=404, detail="Profile not found")
+            profile = Profile(user_id=user_id)
+            db.add(profile)
+            db.flush()
         
         # Get profile data
         profile_dict = profile_data.dict(exclude_unset=True)
@@ -313,6 +349,15 @@ async def update_profile(
         gender = profile_dict.pop("gender", None)
         religion = profile_dict.pop("religion", None)
         # genetic_conditions and necessary_preferences are already strings from frontend
+
+        if user.identity_verified:
+            profile_dict["identity_verified"] = True
+            if user.father_name is not None:
+                profile_dict["father_name"] = user.father_name
+            if user.mother_name is not None:
+                profile_dict["mother_name"] = user.mother_name
+            if user.date_of_birth is not None:
+                profile_dict["date_of_birth"] = user.date_of_birth
         
         # Process base64 files
         if 'profile_picture' in profile_dict and profile_dict['profile_picture']:
@@ -336,16 +381,17 @@ async def update_profile(
                 profile_dict['medical_documents_filename'] = filename
                 profile_dict['medical_documents_content_type'] = content_type
         
-        if name is not None:
-            user.name = name
-        if age is not None:
-            user.age = age
-        if date_of_birth is not None:
-            user.date_of_birth = datetime.strptime(date_of_birth, "%Y-%m-%d").date() if date_of_birth else None
-        if gender is not None:
-            user.gender = gender
-        if religion is not None:
-            user.religion = religion
+        if not user.identity_verified:
+            if name is not None:
+                user.name = name
+            if age is not None:
+                user.age = age
+            if date_of_birth is not None:
+                user.date_of_birth = datetime.strptime(date_of_birth, "%Y-%m-%d").date() if date_of_birth else None
+            if gender is not None:
+                user.gender = gender
+            if religion is not None:
+                user.religion = religion
 
         # Update profile
         updated_profile = ProfileRepository.update(db, profile, **profile_dict)
@@ -353,14 +399,7 @@ async def update_profile(
         return JSONResponse(
             content={
                 "message": "Profile updated successfully",
-                "profile": {
-                    **updated_profile.to_dict(),
-                    "name": user.name,
-                    "age": user.age,
-                    "date_of_birth": user.date_of_birth.isoformat() if user.date_of_birth else None,
-                    "gender": user.gender,
-                    "religion": user.religion,
-                }
+                "profile": _build_profile_response(updated_profile, user)
             },
             status_code=200
         )
@@ -425,11 +464,12 @@ async def get_profile_by_user_id(
     """Get a specific user's profile by user ID"""
     try:
         profile = ProfileRepository.get_by_user_id(db, user_id)
+        user = db.query(User).filter(User.id == user_id).first()
         
-        if not profile:
+        if not profile or not user:
             raise HTTPException(status_code=404, detail="Profile not found")
         
-        return JSONResponse(content=profile.to_dict(), status_code=200)
+        return JSONResponse(content=_build_profile_response(profile, user), status_code=200)
     except HTTPException:
         raise
     except Exception as e:
@@ -667,14 +707,16 @@ async def get_recommendations(
         print(f"[RECOMMENDATIONS] Current user ID: {current_user_id}")
 
         from repositories.interest_repository.interest_repository import InterestRepository
-        from services.recommendation_service import get_recommendations as ml_recommend, is_ready
+        from services.recommendation_service_v2 import get_recommendations as ml_recommend, is_ready
         blocked_ids = BlockRepository.get_blocked_user_ids(db, current_user_id)
 
         print("[RECOMMENDATIONS] Checking if ML model is ready...")
         ml_ready = is_ready()
 
         # Get ML-ranked user_id list (or None if user not in model index) - fetch more for pagination
-        ranked_ids = ml_recommend(current_user_id, db, top_n=200) if ml_ready else None
+        ranked_matches = ml_recommend(current_user_id, db, top_n=100) if ml_ready else None
+        reasons_by_id = {item["user_id"]: item["reason_tags"] for item in (ranked_matches or [])}
+        ranked_ids = [item["user_id"] for item in ranked_matches] if ranked_matches else None
         print(f"[RECOMMENDATIONS] ML ready: {ml_ready}, Ranked IDs count: {len(ranked_ids) if ranked_ids else 0}")
 
         # Fall back: all users except self when model is unavailable OR returns no candidates.
@@ -695,6 +737,7 @@ async def get_recommendations(
 
         if blocked_ids:
             ranked_ids = [uid for uid in ranked_ids if uid not in blocked_ids]
+        ranked_ids = ranked_ids[:100]
 
         # Apply pagination to ranked_ids
         total_count = len(ranked_ids)
@@ -770,7 +813,8 @@ async def get_recommendations(
                 "preferred_age_min": profile.preferred_age_min if profile else None,
                 "preferred_age_max": profile.preferred_age_max if profile else None,
                 "living_with_in_laws": profile.living_with_in_laws if profile else None,
-                "willing_to_relocate": profile.willing_to_relocate if profile else None
+                "willing_to_relocate": profile.willing_to_relocate if profile else None,
+                "recommendation_reasons": reasons_by_id.get(user.id, [])
             })
 
         has_more = (offset + len(result)) < total_count

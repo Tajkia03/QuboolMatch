@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { getAccessToken, API_BASE_URL } from "../services/api";
 import IntroVideoDisplay from "../components/IntroVideoDisplay";
 import MedicalDocumentsDisplay from "../components/MedicalDocumentsDisplay";
@@ -16,6 +16,7 @@ interface ProfileData {
   name: string;
   age: string;
   dateOfBirth: string;
+  identityVerified: boolean;
   gender: string;
   location: string;
   fatherName: string;
@@ -96,6 +97,68 @@ interface CompletionResult {
     preferences: CompletionSection;
   };
 }
+
+interface ProfileSectionCardProps {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}
+
+const ProfileSectionCard: React.FC<ProfileSectionCardProps> = ({ title, description, children }) => {
+  const toneByTitle: Record<string, { shell: string; accent: string }> = {
+    "Profile Summary": { shell: "border-purple-200 bg-purple-50", accent: "bg-purple-500" },
+    "Profile Completion": { shell: "border-emerald-200 bg-emerald-50", accent: "bg-emerald-500" },
+    "Verified Identity": { shell: "border-violet-200 bg-violet-50", accent: "bg-violet-500" },
+    "Basic Information": { shell: "border-emerald-200 bg-emerald-50", accent: "bg-emerald-500" },
+    "Family & Guardian": { shell: "border-orange-200 bg-orange-50", accent: "bg-orange-400" },
+    "Education & Career": { shell: "border-blue-200 bg-blue-50", accent: "bg-blue-500" },
+    "Lifestyle & Interests": { shell: "border-rose-200 bg-rose-50", accent: "bg-rose-400" },
+    "Partner Preferences": { shell: "border-amber-200 bg-amber-50", accent: "bg-amber-400" },
+  };
+  const tone = toneByTitle[title] || { shell: "border-slate-200 bg-slate-50", accent: "bg-slate-400" };
+  const sectionId = `profile-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+
+  return (
+    <section id={sectionId} className={`relative scroll-mt-28 overflow-hidden rounded-2xl border p-5 shadow-[0_8px_25px_rgba(63,45,76,0.06)] [&_.bg-gray-50]:bg-white/70 [&_.border-gray-200]:border-white/80 sm:p-6 ${tone.shell}`}>
+      <span className={`absolute inset-y-0 left-0 w-1.5 ${tone.accent}`} aria-hidden="true" />
+      <div className="mb-5 pl-1">
+        <h2 className="text-lg font-semibold text-gray-800">{title}</h2>
+        {description ? <p className="mt-1 text-sm text-gray-500">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+};
+
+const EmptyValue: React.FC = () => {
+  return <span className="text-sm text-gray-400">Not added yet</span>;
+};
+
+interface VerifiedBadgeProps {
+  verified: boolean;
+}
+
+const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({ verified }) => {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+        verified
+          ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+          : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+      }`}
+    >
+      {verified ? "Verified from NID" : "Pending Verification"}
+    </span>
+  );
+};
+
+const SummaryValue: React.FC<{ value: string }> = ({ value }) => {
+  return value.trim() ? (
+    <span className="text-sm font-medium text-gray-800">{value}</span>
+  ) : (
+    <EmptyValue />
+  );
+};
 
 const parseAdditionalComments = (value: string | null | undefined) => {
   let generalComment = "";
@@ -244,17 +307,54 @@ const getProfileCompletion = (profile: ProfileData): CompletionResult => {
   };
 };
 
+const calculateAgeFromDateOfBirth = (dateOfBirth: string): string => {
+  if (!dateOfBirth) {
+    return "";
+  }
+
+  const parsed = new Date(dateOfBirth);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - parsed.getFullYear();
+  const monthDifference = today.getMonth() - parsed.getMonth();
+
+  if (monthDifference < 0 || (monthDifference === 0 && today.getDate() < parsed.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? String(age) : "";
+};
+
+const parseJsonArraySafely = (value: unknown, fallback: string[]): string[] => {
+  if (typeof value !== "string" || !value.trim()) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 const ProfilePage: React.FC = () => {
   const [introVideoFile, setIntroVideoFile] = useState<File | null>(null);
   const [medicalDocumentFile, setMedicalDocumentFile] = useState<File | null>(null);
   const [hasExistingVideo, setHasExistingVideo] = useState(false);
   const [hasExistingDocument, setHasExistingDocument] = useState(false);
+  const [activeProfileSection, setActiveProfileSection] = useState("profile-profile-summary");
+  const sectionHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const [profile, setProfile] = useState<ProfileData>({
     // Personal Information
     name: "",
     age: "",
     dateOfBirth: "",
+    identityVerified: false,
     gender: "",
     location: "",
     fatherName: "",
@@ -333,6 +433,11 @@ const ProfilePage: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> | { target: { name: string; value: any; type?: string; checked?: boolean } }) => {
     const { name, value, type } = e.target as HTMLInputElement & { type?: string };
     const checked = (e.target as HTMLInputElement).checked;
+    const lockedIdentityFields = new Set(["name", "dateOfBirth", "fatherName", "motherName"]);
+
+    if (profile.identityVerified && lockedIdentityFields.has(name)) {
+      return;
+    }
 
     if (name === 'guardianRelation') {
       setProfile((prev) => ({
@@ -603,11 +708,11 @@ const ProfilePage: React.FC = () => {
         });
 
         if (response.ok) {
-          const data = await response.json();
-          
-          // Check if video and documents exist
-          setHasExistingVideo(data.has_intro_video || false);
-          setHasExistingDocument(data.has_medical_documents || false);
+        const data = await response.json();
+        
+        // Check if video and documents exist
+        setHasExistingVideo(data.has_intro_video || false);
+        setHasExistingDocument(data.has_medical_documents || false);
           
           // Load profile picture if available
           let profilePictureData = '';
@@ -629,68 +734,77 @@ const ProfilePage: React.FC = () => {
           
           // Transform backend data to frontend format
           const parsedAdditionalComments = parseAdditionalComments(data.additional_comments || '');
-          setProfile({
-            name: data.name || '',
-            age: data.age || '',
-            dateOfBirth: data.date_of_birth || '',
-            gender: data.gender || '',
-            location: data.location || '',
-            fatherName: data.father_name || data.guardian_name || '',
-            motherName: data.mother_name || '',
-            guardianName: data.guardian_name || '',
-            guardianRelation: data.guardian_relation || '',
-            guardianRelationOther: data.guardian_relation_other || '',
-            guardianContactNumber: data.guardian_contact_number || '',
-            academicBackground: data.academic_background || '',
-            profession: data.profession || '',
-            maritalStatus: data.marital_status || '',
-            religion: data.religion || '',
-            hobbies: data.hobbies || '',
-            introVideo: '', // Video needs separate handling
-            medicalHistory: data.medical_history || '',
-            overallHealthStatus: data.overall_health_status || '',
-            longTermCondition: data.long_term_condition || '',
-            longTermConditionDescription: data.long_term_condition_description || '',
-            bloodGroup: data.blood_group || '',
-            geneticConditions: data.genetic_conditions ? JSON.parse(data.genetic_conditions) : [],
-            fertilityAwareness: data.fertility_awareness || '',
-            disability: data.disability || '',
-            disabilityDescription: data.disability_description || '',
-            medicalDocuments: '', // Documents need separate handling
-            height: data.height?.toString() || '',
-            weight: data.weight?.toString() || '',
-            dietaryPreference: data.dietary_preference || '',
-            smokingHabit: data.smoking_habit || '',
-            alcoholConsumption: data.alcohol_consumption || '',
-            chronicIllness: data.chronic_illness || '',
-            interests: data.interests || '',
-            profilePicture: profilePictureData,
-            preferredAgeMin: data.preferred_age_min?.toString() || '',
-            preferredAgeMax: data.preferred_age_max?.toString() || '',
-            preferredHeightMin: data.preferred_height_min?.toString() || '',
-            preferredHeightMax: data.preferred_height_max?.toString() || '',
-            preferredWeightMin: data.preferred_weight_min?.toString() || '',
-            preferredWeightMax: data.preferred_weight_max?.toString() || '',
-            preferredReligion: data.preferred_religion || '',
-            preferredEducation: data.preferred_education || '',
-            preferredProfession: data.preferred_profession || '',
-            preferredLocation: data.preferred_location || '',
-            specificLocation: data.specific_location || '',
-            willingToRelocate: data.willing_to_relocate || false,
-            lifestylePreferences: {
-              smoking: data.lifestyle_pref_smoking || '',
-              alcohol: data.lifestyle_pref_alcohol || '',
-              dietaryMatch: data.lifestyle_pref_dietary_match || false
-            },
-            livingWithInLaws: data.living_with_in_laws || '',
-            livingArrangementComment: data.living_arrangement_comment || parsedAdditionalComments.livingArrangementComment || '',
-            fertilityComment: data.fertility_comment || parsedAdditionalComments.fertilityComment || '',
-            preferredReligionComment: data.preferred_religion_comment || parsedAdditionalComments.preferredReligionComment || '',
-            preferredEducationComment: data.preferred_education_comment || parsedAdditionalComments.preferredEducationComment || '',
-            careerSupportComment: data.career_support_comment || parsedAdditionalComments.careerSupportComment || '',
-            careerSupportExpectations: data.career_support_expectations || '',
-            necessaryPreferences: data.necessary_preferences ? JSON.parse(data.necessary_preferences) : [],
-            additionalComments: parsedAdditionalComments.generalComment
+          setProfile((prev) => {
+            const backendAge = typeof data.age === "number" ? String(data.age) : "";
+            const derivedAge = backendAge || calculateAgeFromDateOfBirth(data.date_of_birth || "");
+
+            return {
+              ...prev,
+              name: data.name || prev.name || "",
+              age: backendAge || prev.age || derivedAge,
+              dateOfBirth: data.date_of_birth || prev.dateOfBirth || "",
+              identityVerified: Boolean(data.identity_verified),
+              gender: data.gender || prev.gender || "",
+              location: data.location || prev.location || "",
+              fatherName: data.father_name || prev.fatherName || "",
+              motherName: data.mother_name || prev.motherName || "",
+              guardianName: data.guardian_name || prev.guardianName || "",
+              guardianRelation: data.guardian_relation || prev.guardianRelation || "",
+              guardianRelationOther: data.guardian_relation_other || prev.guardianRelationOther || "",
+              guardianContactNumber: data.guardian_contact_number || prev.guardianContactNumber || "",
+              academicBackground: data.academic_background || prev.academicBackground || "",
+              profession: data.profession || prev.profession || "",
+              maritalStatus: data.marital_status || prev.maritalStatus || "",
+              religion: data.religion || prev.religion || "",
+              hobbies: data.hobbies || prev.hobbies || "",
+              introVideo: prev.introVideo,
+              medicalHistory: data.medical_history || prev.medicalHistory || "",
+              overallHealthStatus: data.overall_health_status || prev.overallHealthStatus || "",
+              longTermCondition: data.long_term_condition || prev.longTermCondition || "",
+              longTermConditionDescription: data.long_term_condition_description || prev.longTermConditionDescription || "",
+              bloodGroup: data.blood_group || prev.bloodGroup || "",
+              geneticConditions: parseJsonArraySafely(data.genetic_conditions, prev.geneticConditions),
+              fertilityAwareness: data.fertility_awareness || prev.fertilityAwareness || "",
+              disability: data.disability || prev.disability || "",
+              disabilityDescription: data.disability_description || prev.disabilityDescription || "",
+              medicalDocuments: prev.medicalDocuments,
+              height: data.height?.toString() || prev.height || "",
+              weight: data.weight?.toString() || prev.weight || "",
+              dietaryPreference: data.dietary_preference || prev.dietaryPreference || "",
+              smokingHabit: data.smoking_habit || prev.smokingHabit || "",
+              alcoholConsumption: data.alcohol_consumption || prev.alcoholConsumption || "",
+              chronicIllness: data.chronic_illness || prev.chronicIllness || "",
+              interests: data.interests || prev.interests || "",
+              profilePicture: profilePictureData || prev.profilePicture || "",
+              preferredAgeMin: data.preferred_age_min?.toString() || prev.preferredAgeMin || "",
+              preferredAgeMax: data.preferred_age_max?.toString() || prev.preferredAgeMax || "",
+              preferredHeightMin: data.preferred_height_min?.toString() || prev.preferredHeightMin || "",
+              preferredHeightMax: data.preferred_height_max?.toString() || prev.preferredHeightMax || "",
+              preferredWeightMin: data.preferred_weight_min?.toString() || prev.preferredWeightMin || "",
+              preferredWeightMax: data.preferred_weight_max?.toString() || prev.preferredWeightMax || "",
+              preferredReligion: data.preferred_religion || prev.preferredReligion || "",
+              preferredEducation: data.preferred_education || prev.preferredEducation || "",
+              preferredProfession: data.preferred_profession || prev.preferredProfession || "",
+              preferredLocation: data.preferred_location || prev.preferredLocation || "",
+              specificLocation: data.specific_location || prev.specificLocation || "",
+              willingToRelocate: typeof data.willing_to_relocate === "boolean" ? data.willing_to_relocate : prev.willingToRelocate,
+              lifestylePreferences: {
+                smoking: data.lifestyle_pref_smoking || prev.lifestylePreferences.smoking || "",
+                alcohol: data.lifestyle_pref_alcohol || prev.lifestylePreferences.alcohol || "",
+                dietaryMatch: typeof data.lifestyle_pref_dietary_match === "boolean"
+                  ? data.lifestyle_pref_dietary_match
+                  : prev.lifestylePreferences.dietaryMatch
+              },
+              livingWithInLaws: data.living_with_in_laws || prev.livingWithInLaws || "",
+              livingArrangementComment: data.living_arrangement_comment || parsedAdditionalComments.livingArrangementComment || prev.livingArrangementComment || "",
+              fertilityComment: data.fertility_comment || parsedAdditionalComments.fertilityComment || prev.fertilityComment || "",
+              preferredReligionComment: data.preferred_religion_comment || parsedAdditionalComments.preferredReligionComment || prev.preferredReligionComment || "",
+              preferredEducationComment: data.preferred_education_comment || parsedAdditionalComments.preferredEducationComment || prev.preferredEducationComment || "",
+              careerSupportComment: data.career_support_comment || parsedAdditionalComments.careerSupportComment || prev.careerSupportComment || "",
+              careerSupportExpectations: data.career_support_expectations || prev.careerSupportExpectations || "",
+              necessaryPreferences: parseJsonArraySafely(data.necessary_preferences, prev.necessaryPreferences),
+              additionalComments: parsedAdditionalComments.generalComment || prev.additionalComments || ""
+            };
           });
         }
       } catch (error) {
@@ -701,37 +815,140 @@ const ProfilePage: React.FC = () => {
     loadProfile();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (sectionHighlightTimer.current) {
+        clearTimeout(sectionHighlightTimer.current);
+      }
+    };
+  }, []);
+
+  const navigateToProfileSection = (targetId: string) => {
+    const target = document.getElementById(targetId);
+    if (!target) return;
+
+    setActiveProfileSection(targetId);
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    document.querySelectorAll(".profile-section-highlight").forEach((section) => {
+      section.classList.remove("profile-section-highlight");
+    });
+    void target.offsetWidth;
+    target.classList.add("profile-section-highlight");
+
+    if (sectionHighlightTimer.current) {
+      clearTimeout(sectionHighlightTimer.current);
+    }
+    sectionHighlightTimer.current = setTimeout(() => {
+      target.classList.remove("profile-section-highlight");
+      sectionHighlightTimer.current = null;
+    }, 700);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <div className="container mx-auto max-w-4xl bg-white shadow-lg rounded-lg p-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">Complete Your Profile</h1>
-        <div className="mb-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Profile Completion</h2>
-            <span className="text-xs font-medium text-gray-500">{completion.overallPercent}%</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-            <div
-              className="bg-emerald-500 h-2 rounded-full transition-all"
-              style={{ width: `${completion.overallPercent}%` }}
-            />
-          </div>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-            <div className="flex items-center justify-between bg-gray-50 border rounded px-2 py-1.5">
-              <span>Personal</span>
-              <span>{completion.sections.personal.completed}/{completion.sections.personal.total}</span>
-            </div>
-            <div className="flex items-center justify-between bg-gray-50 border rounded px-2 py-1.5">
-              <span>Health</span>
-              <span>{completion.sections.health.completed}/{completion.sections.health.total}</span>
-            </div>
-            <div className="flex items-center justify-between bg-gray-50 border rounded px-2 py-1.5">
-              <span>Preferences</span>
-              <span>{completion.sections.preferences.completed}/{completion.sections.preferences.total}</span>
-            </div>
+    <div className="min-h-screen bg-[#f6f3f8] pb-12">
+      <header className="h-44 bg-gradient-to-br from-[#342154] via-[#75499a] to-[#ba5a82] px-4 pt-9 text-white shadow-xl">
+        <div className="mx-auto flex max-w-7xl items-start justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-pink-200">Your profile</p>
+            <h1 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl">Complete your profile</h1>
+            <p className="mt-2 text-sm text-purple-100">A detailed profile helps us find people who genuinely fit your life.</p>
           </div>
         </div>
-        <form onSubmit={handleSubmit}>
+      </header>
+
+      <div className="mx-auto -mt-16 grid max-w-7xl items-start gap-5 px-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="space-y-5 lg:sticky lg:top-5">
+          <ProfileSummaryHeader
+            profile={profile}
+            completionPercent={completion.overallPercent}
+            onProfilePictureChange={handleProfilePictureChange}
+          />
+          <ProfileSectionCard
+            title="Profile Completion"
+            description="Track your details and verification."
+          >
+          <div className="space-y-4">
+            <div className="rounded-xl border border-emerald-200 bg-white/80 p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-700">Overall Completion</h3>
+                <span className="text-xs font-medium text-gray-500">{completion.overallPercent}%</span>
+              </div>
+              <div className="mt-3 w-full rounded-full bg-gray-200">
+                <div
+                  className="h-2 rounded-full bg-emerald-500 transition-all"
+                  style={{ width: `${completion.overallPercent}%` }}
+                />
+              </div>
+              <p className="mt-2 text-sm text-gray-500">
+                Your profile is {completion.overallPercent}% complete.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-emerald-200 bg-white/80 p-4">
+              <h3 className="text-sm font-semibold text-gray-700">Verification Status</h3>
+              <div className="mt-3 flex items-center gap-2">
+                <VerifiedBadge verified={profile.identityVerified} />
+                <span className="text-sm text-gray-600">
+                  {profile.identityVerified ? "Identity details are verified." : "Pending Verification"}
+                </span>
+              </div>
+            </div>
+
+          <div className="grid grid-cols-1 gap-2 text-xs">
+            <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-white/75 px-3 py-2.5">
+              <span className="font-medium text-gray-600">Personal Information</span>
+              <span className="font-semibold text-gray-800">
+                {completion.sections.personal.completed}/{completion.sections.personal.total}
+              </span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-white/75 px-3 py-2.5">
+              <span className="font-medium text-gray-600">Health Information</span>
+              <span className="font-semibold text-gray-800">
+                {completion.sections.health.completed}/{completion.sections.health.total}
+              </span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-white/75 px-3 py-2.5">
+              <span className="font-medium text-gray-600">Partner Preferences</span>
+              <span className="font-semibold text-gray-800">
+                {completion.sections.preferences.completed}/{completion.sections.preferences.total}
+              </span>
+            </div>
+          </div>
+          </div>
+        </ProfileSectionCard>
+        </aside>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <nav className="sticky top-3 z-30 overflow-x-auto rounded-2xl border border-purple-100 bg-white/95 p-2 shadow-lg shadow-purple-100/60 backdrop-blur-md" aria-label="Profile sections">
+            <div className="flex min-w-max gap-2">
+              {[
+                ["Overview", "profile-profile-summary"],
+                ["Identity", "profile-verified-identity"],
+                ["Basic information", "profile-basic-information"],
+                ["Family & guardian", "profile-family-guardian"],
+                ["Career", "profile-education-career"],
+                ["Health", "profile-health-genetics"],
+                ["Lifestyle", "profile-lifestyle-interests"],
+                ["Partner preferences", "profile-partner-preferences"],
+              ].map(([label, target]) => (
+                <button
+                  key={target}
+                  type="button"
+                  onClick={() => navigateToProfileSection(target)}
+                  aria-current={activeProfileSection === target ? "location" : undefined}
+                  className={`rounded-xl px-4 py-2 text-sm font-medium transition focus:outline-none ${
+                    activeProfileSection === target
+                      ? "bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-md shadow-purple-200"
+                      : "text-gray-600 hover:bg-purple-100 hover:text-purple-800"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </nav>
+
           {/* Profile Header */}
           <ProfileHeader
             profile={profile}
@@ -761,12 +978,12 @@ const ProfilePage: React.FC = () => {
           />
 
           {/* Submit Button */}
-          <div className="mt-6 text-center">
+          <div className="flex justify-end rounded-2xl border border-purple-100 bg-white/80 p-4 shadow-sm backdrop-blur-sm">
             <button
               type="submit"
-              className="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 transition"
+              className="rounded-xl bg-gradient-to-r from-[#653e86] to-[#a64f7b] px-7 py-3 font-semibold text-white shadow-lg shadow-purple-200 transition hover:-translate-y-0.5 hover:shadow-xl"
             >
-              Save Profile
+              Save profile changes
             </button>
           </div>
         </form>
@@ -780,164 +997,219 @@ const ProfileHeader: React.FC<{
   onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
   onProfilePictureChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }> = ({ profile, onInputChange, onProfilePictureChange }) => {
-  return (
-    <div className="flex flex-col md:flex-row items-center md:items-start md:justify-between mb-6">
-      <div className="flex items-center space-x-4">
-        {/* Profile Picture */}
-        <div className="relative">
-          <img
-            src={profile.profilePicture || "https://via.placeholder.com/150"}
-            alt="Profile"
-            className="w-24 h-24 rounded-full shadow-md object-cover"
-          />
-          <label
-            htmlFor="profilePicture"
-            className="absolute bottom-0 right-0 bg-indigo-600 text-white text-xs px-2 py-1 rounded-full cursor-pointer hover:bg-indigo-700"
-          >
-            Upload
-          </label>
-          <input
-            type="file"
-            id="profilePicture"
-            accept="image/*"
-            onChange={onProfilePictureChange}
-            className="hidden"
-          />
-        </div>
+  const identityFieldClass = "mt-1 block w-full cursor-not-allowed rounded-md border border-violet-200 bg-white/60 px-4 py-2 text-gray-600 shadow-sm outline-none";
+  const standardFieldClass = "mt-1 block w-full rounded-md border border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500";
+  const renderMissing = (value: string) =>
+    !value ? (
+      <div className="mt-1">
+        <EmptyValue />
+      </div>
+    ) : null;
 
-        {/* Name and Basic Info */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Name</label>
-          <input
-            type="text"
-            name="name"
-            value={profile.name}
-            onChange={onInputChange}
-            className="text-lg font-bold text-gray-800 bg-transparent border-b border-gray-300 focus:outline-none focus:border-indigo-500 w-full"
-            placeholder="Enter your name"
-          />
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Age</label>
-            <input
-              type="number"
-              name="age"
-              value={profile.age}
-              onChange={onInputChange}
-              className="bg-transparent border-b border-gray-300 focus:outline-none focus:border-indigo-500 w-full"
-              placeholder="Enter your age"
-            />
-          </div>
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
-            <input
-              type="date"
-              name="dateOfBirth"
-              value={profile.dateOfBirth}
-              onChange={onInputChange}
-              className="bg-transparent border-b border-gray-300 focus:outline-none focus:border-indigo-500 w-full"
-            />
-          </div>
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Gender</label>
-            <select
-              name="gender"
-              value={profile.gender}
-              onChange={onInputChange}
-              className="bg-transparent border-b border-gray-300 focus:outline-none focus:border-indigo-500 w-full"
-            >
-              <option value="">Select Gender</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Father's Name</label>
-            <input
-              type="text"
-              name="fatherName"
-              value={profile.fatherName}
-              onChange={onInputChange}
-              className="bg-transparent border-b border-gray-300 focus:outline-none focus:border-indigo-500 w-full"
-              placeholder="Enter father's name"
-            />
-          </div>
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Mother's Name</label>
-            <input
-              type="text"
-              name="motherName"
-              value={profile.motherName}
-              onChange={onInputChange}
-              className="bg-transparent border-b border-gray-300 focus:outline-none focus:border-indigo-500 w-full"
-              placeholder="Enter mother's name"
-            />
-          </div>
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Guardian Name ( For Verification)</label>
-            <input
-              type="text"
-              name="guardianName"
-              value={profile.guardianName}
-              onChange={onInputChange}
-              className="bg-transparent border-b border-gray-300 focus:outline-none focus:border-indigo-500 w-full"
-              placeholder="Father, mother, or legal guardian"
-            />
-          </div>
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Relation with the User</label>
-            <select
-              name="guardianRelation"
-              value={profile.guardianRelation}
-              onChange={onInputChange}
-              className="bg-transparent border-b border-gray-300 focus:outline-none focus:border-indigo-500 w-full"
-            >
-              <option value="">Select Relation</option>
-              <option value="Father">Father</option>
-              <option value="Mother">Mother</option>
-              <option value="Sibling">Sibling</option>
-              <option value="Uncle">Uncle</option>
-              <option value="Aunt">Aunt</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          {profile.guardianRelation === "Other" && (
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Relation Details (Optional)</label>
+  return (
+    <div className="mb-8 space-y-6">
+      <div className="grid items-start gap-5 md:grid-cols-3">
+        <ProfileSectionCard
+          title="Verified Identity"
+          description="These identity details are shown from your verified profile records."
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Full Name</label>
               <input
                 type="text"
-                name="guardianRelationOther"
-                value={profile.guardianRelationOther}
+                name="name"
+                value={profile.name}
                 onChange={onInputChange}
-                className="bg-transparent border-b border-gray-300 focus:outline-none focus:border-indigo-500 w-full"
-                placeholder="Specify relation"
+                readOnly
+                aria-readonly="true"
+                className={identityFieldClass}
+                placeholder="Not added yet"
               />
+              {renderMissing(profile.name)}
             </div>
-          )}
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Guardian Contact Number</label>
-            <input
-              type="tel"
-              name="guardianContactNumber"
-              value={profile.guardianContactNumber}
-              onChange={onInputChange}
-              required
-              className="bg-transparent border-b border-gray-300 focus:outline-none focus:border-indigo-500 w-full"
-              placeholder="Enter guardian contact number"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Father's Name</label>
+              <input
+                type="text"
+                name="fatherName"
+                value={profile.fatherName}
+                onChange={onInputChange}
+                readOnly
+                aria-readonly="true"
+                className={identityFieldClass}
+                placeholder="Not added yet"
+              />
+              {renderMissing(profile.fatherName)}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Mother's Name</label>
+              <input
+                type="text"
+                name="motherName"
+                value={profile.motherName}
+                onChange={onInputChange}
+                readOnly
+                aria-readonly="true"
+                className={identityFieldClass}
+                placeholder="Not added yet"
+              />
+              {renderMissing(profile.motherName)}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+              <input
+                type="date"
+                name="dateOfBirth"
+                value={profile.dateOfBirth}
+                onChange={onInputChange}
+                readOnly
+                aria-readonly="true"
+                className={identityFieldClass}
+              />
+              {renderMissing(profile.dateOfBirth)}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">NID Status</label>
+              <div className="mt-2">
+                <VerifiedBadge verified={profile.identityVerified} />
+              </div>
+            </div>
+            <p className="rounded-lg border border-violet-200 bg-white/60 p-2.5 text-xs leading-relaxed text-violet-700">
+              Identity fields are synced automatically from your verification records and cannot be edited here.
+            </p>
           </div>
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700">Address</label>
-            <input
-              type="text"
-              name="location"
-              value={profile.location}
-              onChange={onInputChange}
-              className="bg-transparent border-b border-gray-300 focus:outline-none focus:border-indigo-500 w-full"
-              placeholder="Enter your location"
-            />
+        </ProfileSectionCard>
+
+        <ProfileSectionCard title="Basic Information" description="General profile details used throughout the app.">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Gender</label>
+              <select
+                name="gender"
+                value={profile.gender}
+                onChange={onInputChange}
+                className={standardFieldClass}
+              >
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+              {renderMissing(profile.gender)}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Religion</label>
+              <select
+                name="religion"
+                value={profile.religion}
+                onChange={onInputChange}
+                className={standardFieldClass}
+              >
+                <option value="">Select Religion</option>
+                <option value="Islam">Islam</option>
+                <option value="Christianity">Christianity</option>
+                <option value="Hinduism">Hinduism</option>
+                <option value="Buddhism">Buddhism</option>
+                <option value="Judaism">Judaism</option>
+                <option value="Sikhism">Sikhism</option>
+                <option value="Other">Other</option>
+              </select>
+              {renderMissing(profile.religion)}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Marital Status</label>
+              <select
+                name="maritalStatus"
+                value={profile.maritalStatus}
+                onChange={onInputChange}
+                className={standardFieldClass}
+              >
+                <option value="">Select Marital Status</option>
+                <option value="Never Married">Never Married</option>
+                <option value="Divorced">Divorced</option>
+                <option value="Widowed">Widowed</option>
+                <option value="Separated">Separated</option>
+                <option value="Annulled">Annulled</option>
+              </select>
+              {renderMissing(profile.maritalStatus)}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Location</label>
+              <input
+                type="text"
+                name="location"
+                value={profile.location}
+                onChange={onInputChange}
+                className={standardFieldClass}
+                placeholder="Not added yet"
+              />
+              {renderMissing(profile.location)}
+            </div>
           </div>
-        </div>
+        </ProfileSectionCard>
+
+        <ProfileSectionCard title="Family & Guardian" description="Family contact details used for verification and support.">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Guardian Name</label>
+              <input
+                type="text"
+                name="guardianName"
+                value={profile.guardianName}
+                onChange={onInputChange}
+                className={standardFieldClass}
+                placeholder="Father, mother, or legal guardian"
+              />
+              {renderMissing(profile.guardianName)}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Guardian Relation</label>
+              <select
+                name="guardianRelation"
+                value={profile.guardianRelation}
+                onChange={onInputChange}
+                className={standardFieldClass}
+              >
+                <option value="">Select Relation</option>
+                <option value="Father">Father</option>
+                <option value="Mother">Mother</option>
+                <option value="Sibling">Sibling</option>
+                <option value="Uncle">Uncle</option>
+                <option value="Aunt">Aunt</option>
+                <option value="Other">Other</option>
+              </select>
+              {renderMissing(profile.guardianRelation)}
+            </div>
+            {profile.guardianRelation === "Other" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Guardian Relation Other</label>
+                <input
+                  type="text"
+                  name="guardianRelationOther"
+                  value={profile.guardianRelationOther}
+                  onChange={onInputChange}
+                  className={standardFieldClass}
+                  placeholder="Specify relation"
+                />
+                {renderMissing(profile.guardianRelationOther)}
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Guardian Contact Number</label>
+              <input
+                type="tel"
+                name="guardianContactNumber"
+                value={profile.guardianContactNumber}
+                onChange={onInputChange}
+                required
+                className={standardFieldClass}
+                placeholder="Enter guardian contact number"
+              />
+              {renderMissing(profile.guardianContactNumber)}
+            </div>
+          </div>
+        </ProfileSectionCard>
       </div>
     </div>
   );
@@ -968,92 +1240,50 @@ const PersonalInfoSection: React.FC<{
 }) => {
   return (
     <div className="mb-6">
-      <h2 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Personal Information</h2>
+      <div className="mb-5 rounded-2xl border border-purple-200 bg-gradient-to-r from-purple-100 to-pink-50 px-5 py-4">
+        <h2 className="text-xl font-semibold text-gray-800">Personal Information</h2>
+        <p className="mt-1 text-sm text-gray-600">Complete each part below to improve your matches.</p>
+      </div>
       {personalRemaining > 0 && (
         <p className="text-sm text-gray-500 mb-4">
           Add {personalRemaining} more field{personalRemaining === 1 ? "" : "s"} to complete this section.
         </p>
       )}
-      <div className="space-y-5">
-        {/* Marital Status */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Marital Status</label>
-          <select
-            name="maritalStatus"
-            value={profile.maritalStatus}
-            onChange={onInputChange}
-            className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-          >
-            <option value="">Select Marital Status</option>
-            <option value="Never Married">Never Married</option>
-            <option value="Divorced">Divorced</option>
-            <option value="Widowed">Widowed</option>
-            <option value="Separated">Separated</option>
-            <option value="Annulled">Annulled</option>
-          </select>
-        </div>
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <ProfileSectionCard
+          title="Education & Career"
+          description="Keep your academic and professional information in one place."
+        >
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Academic Background</label>
+              <input
+                type="text"
+                name="academicBackground"
+                value={profile.academicBackground}
+                onChange={onInputChange}
+                className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter your school, college, highest degree, institution, etc."
+              />
+            </div>
 
-        {/* Religion */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Religion</label>
-          <select
-            name="religion"
-            value={profile.religion}
-            onChange={onInputChange}
-            className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-          >
-            <option value="">Select Religion</option>
-            <option value="Islam">Islam</option>
-            <option value="Christianity">Christianity</option>
-            <option value="Hinduism">Hinduism</option>
-            <option value="Buddhism">Buddhism</option>
-            <option value="Judaism">Judaism</option>
-            <option value="Sikhism">Sikhism</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Profession</label>
+              <input
+                type="text"
+                name="profession"
+                value={profile.profession}
+                onChange={onInputChange}
+                className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter your current job position and company"
+              />
+            </div>
 
-        {/* Academic Background */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Academic Background</label>
-          <input
-            type="text"
-            name="academicBackground"
-            value={profile.academicBackground}
-            onChange={onInputChange}
-            className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="Enter your school, college, highest degree, institution, etc."
-          />
-        </div>
-
-        {/* Profession */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Profession</label>
-          <input
-            type="text"
-            name="profession"
-            value={profile.profession}
-            onChange={onInputChange}
-            className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="Enter your current job position and company"
-          />
-        </div>
-
-        {/* Hobbies */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Hobbies</label>
-          <textarea
-            name="hobbies"
-            value={profile.hobbies}
-            onChange={onInputChange}
-            className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-            rows={3}
-            placeholder="Share your hobbies and activities you enjoy (e.g., cooking, travel, reading)"
-          ></textarea>
-        </div>
+          </div>
+        </ProfileSectionCard>
 
         {/* Introductory Video */}
-        <div>
+        <div className="scroll-mt-28 rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-[0_8px_25px_rgba(59,130,246,0.06)] sm:p-6">
           <label className="block text-sm font-medium text-gray-700">Introductory Video</label>
           <div className="mt-1 flex items-center">
             <label
@@ -1093,8 +1323,8 @@ const PersonalInfoSection: React.FC<{
         </div>
 
         {/* Health & Genetics */}
-        <div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-3 border-b pb-2">Health & Genetics</h3>
+        <div id="profile-health-genetics" className="scroll-mt-28 rounded-2xl border border-rose-200 bg-rose-50 p-5 shadow-[0_8px_25px_rgba(244,63,94,0.06)] [&_.bg-gray-50]:bg-white/70 [&_.border-gray-200]:border-white/80 sm:p-6 xl:col-span-2">
+          <h3 className="mb-3 border-b border-rose-200 pb-3 text-xl font-semibold text-gray-800">Health & Genetics</h3>
           {healthRemaining > 0 && (
             <p className="text-sm text-gray-500 mb-3">
               Add {healthRemaining} more field{healthRemaining === 1 ? "" : "s"} to strengthen this section.
@@ -1182,8 +1412,7 @@ const PersonalInfoSection: React.FC<{
                 />
               </div>
             </div>
-            
-            {/* Blood Group */}
+
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700">Blood Group</label>
               <select
@@ -1203,6 +1432,7 @@ const PersonalInfoSection: React.FC<{
                 <option value="O-">O-</option>
               </select>
             </div>
+            
           </div>
           
           {/* Genetic Conditions */}
@@ -1444,103 +1674,131 @@ const PersonalInfoSection: React.FC<{
           </div>
           
 
-          {/* Dietary Preference */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700">Dietary Preference</label>
-            <div className="flex items-center space-x-4 mt-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="dietaryPreference"
-                  value="Vegetarian"
-                  checked={profile.dietaryPreference === "Vegetarian"}
-                  onChange={onInputChange}
-                  className="mr-2"
-                />
-                Vegetarian
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="dietaryPreference"
-                  value="Non-Vegetarian"
-                  checked={profile.dietaryPreference === "Non-Vegetarian"}
-                  onChange={onInputChange}
-                  className="mr-2"
-                />
-                Non-Vegetarian
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="dietaryPreference"
-                  value="Vegan"
-                  checked={profile.dietaryPreference === "Vegan"}
-                  onChange={onInputChange}
-                  className="mr-2"
-                />
-                Vegan
-              </label>
-            </div>
-          </div>
+          <ProfileSectionCard
+            title="Lifestyle & Interests"
+            description="Daily habits and personal interests you want to share."
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Dietary Preference</label>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="dietaryPreference"
+                      value="Vegetarian"
+                      checked={profile.dietaryPreference === "Vegetarian"}
+                      onChange={onInputChange}
+                      className="mr-2"
+                    />
+                    Vegetarian
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="dietaryPreference"
+                      value="Non-Vegetarian"
+                      checked={profile.dietaryPreference === "Non-Vegetarian"}
+                      onChange={onInputChange}
+                      className="mr-2"
+                    />
+                    Non-Vegetarian
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="dietaryPreference"
+                      value="Vegan"
+                      checked={profile.dietaryPreference === "Vegan"}
+                      onChange={onInputChange}
+                      className="mr-2"
+                    />
+                    Vegan
+                  </label>
+                </div>
+              </div>
 
-          {/* Smoking Habit */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700">Smoking Habit</label>
-            <div className="flex items-center space-x-4 mt-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="smokingHabit"
-                  value="Yes"
-                  checked={profile.smokingHabit === "Yes"}
-                  onChange={onInputChange}
-                  className="mr-2"
-                />
-                Yes
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="smokingHabit"
-                  value="No"
-                  checked={profile.smokingHabit === "No"}
-                  onChange={onInputChange}
-                  className="mr-2"
-                />
-                No
-              </label>
-            </div>
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Smoking Habit</label>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:gap-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="smokingHabit"
+                      value="Yes"
+                      checked={profile.smokingHabit === "Yes"}
+                      onChange={onInputChange}
+                      className="mr-2"
+                    />
+                    Yes
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="smokingHabit"
+                      value="No"
+                      checked={profile.smokingHabit === "No"}
+                      onChange={onInputChange}
+                      className="mr-2"
+                    />
+                    No
+                  </label>
+                </div>
+              </div>
 
-          {/* Alcohol Consumption */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700">Alcohol Consumption</label>
-            <div className="flex items-center space-x-4 mt-2">
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="alcoholConsumption"
-                  value="Yes"
-                  checked={profile.alcoholConsumption === "Yes"}
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Alcohol Consumption</label>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:gap-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="alcoholConsumption"
+                      value="Yes"
+                      checked={profile.alcoholConsumption === "Yes"}
+                      onChange={onInputChange}
+                      className="mr-2"
+                    />
+                    Yes
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="alcoholConsumption"
+                      value="No"
+                      checked={profile.alcoholConsumption === "No"}
+                      onChange={onInputChange}
+                      className="mr-2"
+                    />
+                    No
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Hobbies</label>
+                <textarea
+                  name="hobbies"
+                  value={profile.hobbies}
                   onChange={onInputChange}
-                  className="mr-2"
+                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  rows={3}
+                  placeholder="Share your hobbies and activities you enjoy (e.g., cooking, travel, reading)"
                 />
-                Yes
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="radio"
-                  name="alcoholConsumption"
-                  value="No"
-                  checked={profile.alcoholConsumption === "No"}
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700">Interests</label>
+                <textarea
+                  name="interests"
+                  value={profile.interests}
                   onChange={onInputChange}
-                  className="mr-2"
+                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  rows={3}
+                  placeholder="Share your interests"
                 />
-                No
-              </label>
+              </div>
             </div>
-          </div>
+          </ProfileSectionCard>
 
           
         </div>
@@ -1559,421 +1817,455 @@ const PartnerPreferencesSection: React.FC<{
   preferencesRemaining: number;
 }> = ({ profile, onInputChange, preferencesRemaining }) => {
   return (
-    <div className="mb-6">
-      <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Partner and Marriage Preferences</h2>
-      {preferencesRemaining > 0 && (
-        <p className="text-sm text-gray-500 mb-4">
-          Add {preferencesRemaining} more field{preferencesRemaining === 1 ? "" : "s"} to complete this section.
-        </p>
-      )}
-      
-      {/* Age Preferences */}
-      <div className="mb-5">
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Preferred Age Range</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Minimum Age</label>
-            <input
-              type="number"
-              name="preferredAgeMin"
-              value={profile.preferredAgeMin}
-              onChange={onInputChange}
-              className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-              placeholder="Min Age"
-            />
+    <ProfileSectionCard
+      title="Partner Preferences"
+      description="Organize the preferences that guide your matching criteria."
+    >
+      <div className="space-y-6">
+        {preferencesRemaining > 0 && (
+          <p className="text-sm text-gray-500">
+            Add {preferencesRemaining} more field{preferencesRemaining === 1 ? "" : "s"} to complete this section.
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <h3 className="text-base font-semibold text-gray-700 mb-4">Age Preference</h3>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Minimum Age</label>
+                <input
+                  type="number"
+                  name="preferredAgeMin"
+                  value={profile.preferredAgeMin}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                  placeholder="Min Age"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Maximum Age</label>
+                <input
+                  type="number"
+                  name="preferredAgeMax"
+                  value={profile.preferredAgeMax}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                  placeholder="Max Age"
+                />
+              </div>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Maximum Age</label>
-            <input
-              type="number"
-              name="preferredAgeMax"
-              value={profile.preferredAgeMax}
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <h3 className="text-base font-semibold text-gray-700 mb-4">Height &amp; Weight Preference</h3>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Minimum Height (cm)</label>
+                <input
+                  type="number"
+                  name="preferredHeightMin"
+                  value={profile.preferredHeightMin}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                  placeholder="Min Height"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Maximum Height (cm)</label>
+                <input
+                  type="number"
+                  name="preferredHeightMax"
+                  value={profile.preferredHeightMax}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                  placeholder="Max Height"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Minimum Weight (kg)</label>
+                <input
+                  type="number"
+                  name="preferredWeightMin"
+                  value={profile.preferredWeightMin}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                  placeholder="Min Weight"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Maximum Weight (kg)</label>
+                <input
+                  type="number"
+                  name="preferredWeightMax"
+                  value={profile.preferredWeightMax}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                  placeholder="Max Weight"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 lg:col-span-2">
+            <h3 className="text-base font-semibold text-gray-700 mb-4">Religious, Education &amp; Career Preference</h3>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Preferred Religion</label>
+                <select
+                  name="preferredReligion"
+                  value={profile.preferredReligion}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                >
+                  <option value="">Select Preferred Religion</option>
+                  <option value="muslim">Muslim</option>
+                  <option value="christian">Christian</option>
+                  <option value="hindu">Hindu</option>
+                  <option value="buddhist">Buddhist</option>
+                  <option value="jewish">Jewish</option>
+                  <option value="sikh">Sikh</option>
+                  <option value="noPreference">No Preference</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Any faith-related notes
+                </label>
+                <textarea
+                  name="preferredReligionComment"
+                  value={profile.preferredReligionComment}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                  placeholder="Share anything important about religion"
+                  rows={3}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Preferred Education</label>
+                <select
+                  name="preferredEducation"
+                  value={profile.preferredEducation}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                >
+                  <option value="">Select Preferred Education Level</option>
+                  <option value="highSchool">High School</option>
+                  <option value="bachelors">Bachelor's Degree</option>
+                  <option value="masters">Master's Degree</option>
+                  <option value="doctorate">Doctorate</option>
+                  <option value="noPreference">No Preference</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Any education-related notes
+                </label>
+                <textarea
+                  name="preferredEducationComment"
+                  value={profile.preferredEducationComment}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                  placeholder="Share anything important about education"
+                  rows={3}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700">Preferred Profession</label>
+                <input
+                  type="text"
+                  name="preferredProfession"
+                  value={profile.preferredProfession}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                  placeholder="E.g., Medical, Engineering, Education, etc."
+                />
+              </div>
+
+              <div className="lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700">Career Support Expectations</label>
+                <select
+                  name="careerSupportExpectations"
+                  value={profile.careerSupportExpectations}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                >
+                  <option value="">Select Preference</option>
+                  <option value="fullSupport">Full support for career goals</option>
+                  <option value="partialSupport">Partial support - family comes first</option>
+                  <option value="traditionalRoles">Prefer traditional roles</option>
+                  <option value="flexible">Flexible based on situation</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <h3 className="text-base font-semibold text-gray-700 mb-4">Location Preference</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Preferred Location</label>
+                <select
+                  name="preferredLocation"
+                  value={profile.preferredLocation}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                >
+                  <option value="">Select Location Preference</option>
+                  <option value="sameCity">Same City</option>
+                  <option value="sameCountry">Same Country</option>
+                  <option value="anywhere">Anywhere</option>
+                  <option value="specific">Specific Location</option>
+                </select>
+              </div>
+              {profile.preferredLocation === 'specific' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Specific Location</label>
+                  <input
+                    type="text"
+                    name="specificLocation"
+                    onChange={onInputChange}
+                    className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                    placeholder="Specify location"
+                  />
+                </div>
+              )}
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="willingToRelocate"
+                  name="willingToRelocate"
+                  checked={profile.willingToRelocate}
+                  onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
+                  className="h-4 w-4 text-indigo-600 rounded"
+                />
+                <label htmlFor="willingToRelocate" className="ml-2 block text-sm text-gray-700">
+                  I am open to relocating for my spouse
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <h3 className="text-base font-semibold text-gray-700 mb-4">Lifestyle Preference</h3>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Smoking Tolerance</label>
+                <select
+                  name="lifestylePreferences.smoking"
+                  value={profile.lifestylePreferences.smoking}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                >
+                  <option value="">Select Preference</option>
+                  <option value="nonSmoker">Must be Non-smoker</option>
+                  <option value="occasional">Occasional is acceptable</option>
+                  <option value="noPreference">No Preference</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Alcohol Tolerance</label>
+                <select
+                  name="lifestylePreferences.alcohol"
+                  value={profile.lifestylePreferences.alcohol}
+                  onChange={onInputChange}
+                  className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
+                >
+                  <option value="">Select Preference</option>
+                  <option value="nonDrinker">Must be Non-drinker</option>
+                  <option value="occasional">Occasional is acceptable</option>
+                  <option value="noPreference">No Preference</option>
+                </select>
+              </div>
+              <div className="flex items-center lg:pt-7">
+                <input
+                  type="checkbox"
+                  id="dietaryMatch"
+                  name="lifestylePreferences.dietaryMatch"
+                  checked={profile.lifestylePreferences.dietaryMatch}
+                  onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
+                  className="h-4 w-4 text-indigo-600 rounded"
+                />
+                <label htmlFor="dietaryMatch" className="ml-2 block text-sm text-gray-700">
+                  Dietary preferences must match with mine
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <h3 className="text-base font-semibold text-gray-700 mb-4">Must-Have Preferences</h3>
+            <p className="text-sm text-gray-500 mb-3">Select preferences that are absolutely necessary for you</p>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="necessaryAge"
+                  name="necessaryPreferences"
+                  value="age"
+                  checked={profile.necessaryPreferences.includes('age')}
+                  onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
+                  className="h-4 w-4 text-indigo-600 rounded"
+                />
+                <label htmlFor="necessaryAge" className="ml-2 block text-sm text-gray-700">Age Range</label>
+              </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="necessaryHeight"
+                  name="necessaryPreferences"
+                  value="height"
+                  checked={profile.necessaryPreferences.includes('height')}
+                  onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
+                  className="h-4 w-4 text-indigo-600 rounded"
+                />
+                <label htmlFor="necessaryHeight" className="ml-2 block text-sm text-gray-700">Height</label>
+              </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="necessaryReligion"
+                  name="necessaryPreferences"
+                  value="religion"
+                  checked={profile.necessaryPreferences.includes('religion')}
+                  onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
+                  className="h-4 w-4 text-indigo-600 rounded"
+                />
+                <label htmlFor="necessaryReligion" className="ml-2 block text-sm text-gray-700">Religion</label>
+              </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="necessaryEducation"
+                  name="necessaryPreferences"
+                  value="education"
+                  checked={profile.necessaryPreferences.includes('education')}
+                  onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
+                  className="h-4 w-4 text-indigo-600 rounded"
+                />
+                <label htmlFor="necessaryEducation" className="ml-2 block text-sm text-gray-700">Education</label>
+              </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="necessaryLocation"
+                  name="necessaryPreferences"
+                  value="location"
+                  checked={profile.necessaryPreferences.includes('location')}
+                  onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
+                  className="h-4 w-4 text-indigo-600 rounded"
+                />
+                <label htmlFor="necessaryLocation" className="ml-2 block text-sm text-gray-700">Location</label>
+              </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="necessaryLifestyle"
+                  name="necessaryPreferences"
+                  value="lifestyle"
+                  checked={profile.necessaryPreferences.includes('lifestyle')}
+                  onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
+                  className="h-4 w-4 text-indigo-600 rounded"
+                />
+                <label htmlFor="necessaryLifestyle" className="ml-2 block text-sm text-gray-700">Lifestyle (smoking/alcohol)</label>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <label className="block text-sm font-medium text-gray-700">
+              Any other preferences or expectations
+            </label>
+            <textarea
+              name="additionalComments"
+              value={profile.additionalComments}
               onChange={onInputChange}
               className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-              placeholder="Max Age"
+              placeholder="Share anything else you'd like to mention"
+              rows={3}
             />
           </div>
         </div>
       </div>
-      
-      {/* Height/Weight Preferences */}
-      <div className="mb-5">
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Preferred Height/Weight</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Minimum Height (cm)</label>
-            <input
-              type="number"
-              name="preferredHeightMin"
-              value={profile.preferredHeightMin}
-              onChange={onInputChange}
-              className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-              placeholder="Min Height"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Maximum Height (cm)</label>
-            <input
-              type="number"
-              name="preferredHeightMax"
-              value={profile.preferredHeightMax}
-              onChange={onInputChange}
-              className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-              placeholder="Max Height"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-4 mt-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Minimum Weight (kg)</label>
-            <input
-              type="number"
-              name="preferredWeightMin"
-              value={profile.preferredWeightMin}
-              onChange={onInputChange}
-              className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-              placeholder="Min Weight"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Maximum Weight (kg)</label>
-            <input
-              type="number"
-              name="preferredWeightMax"
-              value={profile.preferredWeightMax}
-              onChange={onInputChange}
-              className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-              placeholder="Max Weight"
-            />
-          </div>
-        </div>
-      </div>
-      
-      {/* Religious Preference */}
-      <div className="mb-5">
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Religious Preference</h3>
-        <select
-          name="preferredReligion"
-          value={profile.preferredReligion}
-          onChange={onInputChange}
-          className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-        >
-          <option value="">Select Preferred Religion</option>
-          <option value="muslim">Muslim</option>
-          <option value="christian">Christian</option>
-          <option value="hindu">Hindu</option>
-          <option value="buddhist">Buddhist</option>
-          <option value="jewish">Jewish</option>
-          <option value="sikh">Sikh</option>
-          <option value="noPreference">No Preference</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-      <div className="mt-3">
-          <label className="block text-sm font-medium text-gray-700">
-            Any faith-related notes
-          </label>
-          <textarea
-            name="preferredReligionComment"
-            value={profile.preferredReligionComment}
-            onChange={onInputChange}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-            placeholder="Share anything important about religion"
-            rows={3}
-          />
-        </div>  
-      
-      {/* Educational & Professional Preferences */}
-      <div className="mb-5">
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Educational & Professional Preference</h3>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Education Level</label>
-          <select
-            name="preferredEducation"
-            value={profile.preferredEducation}
-            onChange={onInputChange}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-          >
-            <option value="">Select Preferred Education Level</option>
-            <option value="highSchool">High School</option>
-            <option value="bachelors">Bachelor's Degree</option>
-            <option value="masters">Master's Degree</option>
-            <option value="doctorate">Doctorate</option>
-            <option value="noPreference">No Preference</option>
-          </select>
-        </div>
-        <div className="mt-3">
-          <label className="block text-sm font-medium text-gray-700">
-            Any education-related notes
-          </label>
-          <textarea
-            name="preferredEducationComment"
-            value={profile.preferredEducationComment}
-            onChange={onInputChange}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-            placeholder="Share anything important about education"
-            rows={3}
-          />
-        </div>
-        <div className="mt-3">
-          <label className="block text-sm font-medium text-gray-700">Professional Field</label>
-          <input
-            type="text"
-            name="preferredProfession"
-            value={profile.preferredProfession}
-            onChange={onInputChange}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-            placeholder="E.g., Medical, Engineering, Education, etc."
-          />
-        </div>
-      </div>
-      
-      {/* Location Preferences */}
-      <div className="mb-5">
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Location Preference</h3>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Preferred Location</label>
-          <select
-            name="preferredLocation"
-            value={profile.preferredLocation}
-            onChange={onInputChange}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-          >
-            <option value="">Select Location Preference</option>
-            <option value="sameCity">Same City</option>
-            <option value="sameCountry">Same Country</option>
-            <option value="anywhere">Anywhere</option>
-            <option value="specific">Specific Location</option>
-          </select>
-          {profile.preferredLocation === 'specific' && (
-            <input
-              type="text"
-              name="specificLocation"
-              onChange={onInputChange}
-              className="mt-2 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-              placeholder="Specify location"
-            />
-          )}
-        </div>
-        <div className="mt-3 flex items-center">
-          <input
-            type="checkbox"
-            id="willingToRelocate"
-            name="willingToRelocate"
-            checked={profile.willingToRelocate}
-            onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
-            className="h-4 w-4 text-indigo-600 rounded"
-          />
-          <label htmlFor="willingToRelocate" className="ml-2 block text-sm text-gray-700">
-            I am open to relocating for my spouse
-          </label>
-        </div>
-      </div>
-      
-      {/* Lifestyle Preferences */}
-      <div className="mb-5">
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Lifestyle Preferences</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Smoking Tolerance</label>
-            <select
-              name="lifestylePreferences.smoking"
-              value={profile.lifestylePreferences.smoking}
-              onChange={onInputChange}
-              className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-            >
-              <option value="">Select Preference</option>
-              <option value="nonSmoker">Must be Non-smoker</option>
-              <option value="occasional">Occasional is acceptable</option>
-              <option value="noPreference">No Preference</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Alcohol Tolerance</label>
-            <select
-              name="lifestylePreferences.alcohol"
-              value={profile.lifestylePreferences.alcohol}
-              onChange={onInputChange}
-              className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-            >
-              <option value="">Select Preference</option>
-              <option value="nonDrinker">Must be Non-drinker</option>
-              <option value="occasional">Occasional is acceptable</option>
-              <option value="noPreference">No Preference</option>
-            </select>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center">
-          <input
-            type="checkbox"
-            id="dietaryMatch"
-            name="lifestylePreferences.dietaryMatch"
-            checked={profile.lifestylePreferences.dietaryMatch}
-            onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
-            className="h-4 w-4 text-indigo-600 rounded"
-          />
-          <label htmlFor="dietaryMatch" className="ml-2 block text-sm text-gray-700">
-            Dietary preferences must match with mine
-          </label>
-        </div>
-      </div>
-      
-      {/* After Marriage Expectations */}
-      <div className="mb-5">
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">After Marriage Expectations</h3>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Living Arrangement</label>
-          <select
-            name="livingWithInLaws"
-            value={profile.livingWithInLaws}
-            onChange={onInputChange}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-          >
-            <option value="">Select Preference</option>
-            <option value="willing">Willing to live with in-laws</option>
-            <option value="preferNot">Prefer separate residence</option>
-            <option value="temporarilyOk">Temporarily acceptable</option>
-            <option value="noPreference">No preference</option>
-          </select>
-        </div>
-        <div className="mt-3">
-          <label className="block text-sm font-medium text-gray-700">
-            Any living-arrangement notes
-          </label>
-          <textarea
-            name="livingArrangementComment"
-            value={profile.livingArrangementComment}
-            onChange={onInputChange}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-            placeholder="Share anything important about living arrangements"
-            rows={3}
-          />
-        </div>
-        <div className="mt-3">
-          <label className="block text-sm font-medium text-gray-700">Career Support Expectations</label>
-          <select
-            name="careerSupportExpectations"
-            value={profile.careerSupportExpectations}
-            onChange={onInputChange}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-          >
-            <option value="">Select Preference</option>
-            <option value="fullSupport">Full support for career goals</option>
-            <option value="partialSupport">Partial support - family comes first</option>
-            <option value="traditionalRoles">Prefer traditional roles</option>
-            <option value="flexible">Flexible based on situation</option>
-          </select>
-        </div>
-        <div className="mt-3">
-          <label className="block text-sm font-medium text-gray-700">
-            Any career-support notes
-          </label>
-          <textarea
-            name="careerSupportComment"
-            value={profile.careerSupportComment}
-            onChange={onInputChange}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-            placeholder="Share anything important about career support"
-            rows={3}
-          />
-        </div>
-      </div>
-      
-      {/* Must-Have Preferences */}
-      <div className="mb-5">
-        <h3 className="text-lg font-semibold text-gray-700 mb-2">Must-Have Preferences</h3>
-        <p className="text-sm text-gray-500 mb-2">Select preferences that are absolutely necessary for you</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="necessaryAge"
-              name="necessaryPreferences"
-              value="age"
-              checked={profile.necessaryPreferences.includes('age')}
-              onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
-              className="h-4 w-4 text-indigo-600 rounded"
-            />
-            <label htmlFor="necessaryAge" className="ml-2 block text-sm text-gray-700">Age Range</label>
-          </div>
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="necessaryHeight"
-              name="necessaryPreferences"
-              value="height"
-              checked={profile.necessaryPreferences.includes('height')}
-              onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
-              className="h-4 w-4 text-indigo-600 rounded"
-            />
-            <label htmlFor="necessaryHeight" className="ml-2 block text-sm text-gray-700">Height</label>
-          </div>
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="necessaryReligion"
-              name="necessaryPreferences"
-              value="religion"
-              checked={profile.necessaryPreferences.includes('religion')}
-              onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
-              className="h-4 w-4 text-indigo-600 rounded"
-            />
-            <label htmlFor="necessaryReligion" className="ml-2 block text-sm text-gray-700">Religion</label>
-          </div>
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="necessaryEducation"
-              name="necessaryPreferences"
-              value="education"
-              checked={profile.necessaryPreferences.includes('education')}
-              onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
-              className="h-4 w-4 text-indigo-600 rounded"
-            />
-            <label htmlFor="necessaryEducation" className="ml-2 block text-sm text-gray-700">Education</label>
-          </div>
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="necessaryLocation"
-              name="necessaryPreferences"
-              value="location"
-              checked={profile.necessaryPreferences.includes('location')}
-              onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
-              className="h-4 w-4 text-indigo-600 rounded"
-            />
-            <label htmlFor="necessaryLocation" className="ml-2 block text-sm text-gray-700">Location</label>
-          </div>
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="necessaryLifestyle"
-              name="necessaryPreferences"
-              value="lifestyle"
-              checked={profile.necessaryPreferences.includes('lifestyle')}
-              onChange={(e) => onInputChange(e as React.ChangeEvent<HTMLInputElement>)}
-              className="h-4 w-4 text-indigo-600 rounded"
-            />
-            <label htmlFor="necessaryLifestyle" className="ml-2 block text-sm text-gray-700">Lifestyle (smoking/alcohol)</label>
-          </div>
-        </div>
-      </div>
-      <div className="mt-3">
-          <label className="block text-sm font-medium text-gray-700">
-            Any other preferences or expectations
-          </label>
-          <textarea
-            name="additionalComments"
-            value={profile.additionalComments}
-            onChange={onInputChange}
-            className="mt-1 w-full rounded-md border border-gray-300 p-2 focus:border-indigo-600 focus:outline-none"
-            placeholder="Share anything else you'd like to mention"
-            rows={3}
-          />
-        </div>
-      
-    </div>
+      </ProfileSectionCard>
   );
 };
 
 export default ProfilePage;
+
+const ProfileSummaryHeader: React.FC<{
+  profile: ProfileData;
+  completionPercent: number;
+  onProfilePictureChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}> = ({ profile, completionPercent, onProfilePictureChange }) => {
+  const hasProfilePicture = Boolean(profile.profilePicture);
+
+  return (
+    <ProfileSectionCard
+      title="Profile Summary"
+      description="A quick snapshot of the details currently saved in your profile."
+    >
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col items-center gap-3">
+          <div className="relative">
+            <img
+              src={profile.profilePicture || "https://via.placeholder.com/160"}
+              alt="Profile"
+              className="h-28 w-28 rounded-full object-cover shadow-md ring-4 ring-white"
+            />
+            <label
+              htmlFor="summaryProfilePicture"
+              className="absolute bottom-0 right-0 cursor-pointer rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white shadow hover:bg-indigo-700"
+            >
+              Upload
+            </label>
+            <input
+              type="file"
+              id="summaryProfilePicture"
+              accept="image/*"
+              onChange={onProfilePictureChange}
+              className="hidden"
+            />
+          </div>
+          <div className="text-center">
+            <div className="text-sm font-medium text-gray-700">Profile Picture</div>
+            <div>{hasProfilePicture ? <span className="text-sm text-gray-500">Added</span> : <EmptyValue />}</div>
+          </div>
+        </div>
+
+        <div className="flex-1">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <VerifiedBadge verified={profile.identityVerified} />
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+              {completionPercent}% complete
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2">
+            <div className="rounded-lg border border-purple-200 bg-white/80 p-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Name</div>
+              <SummaryValue value={profile.name} />
+            </div>
+            <div className="rounded-lg border border-purple-200 bg-white/80 p-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Age</div>
+              <SummaryValue value={profile.age} />
+            </div>
+            <div className="rounded-lg border border-purple-200 bg-white/80 p-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Gender</div>
+              <SummaryValue value={profile.gender} />
+            </div>
+            <div className="rounded-lg border border-purple-200 bg-white/80 p-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Location</div>
+              <SummaryValue value={profile.location} />
+            </div>
+            <div className="rounded-lg border border-purple-200 bg-white/80 p-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Profession</div>
+              <SummaryValue value={profile.profession} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </ProfileSectionCard>
+  );
+};

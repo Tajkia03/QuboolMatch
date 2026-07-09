@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi.responses import JSONResponse
 from fastapi import APIRouter, Depends, Response, HTTPException, Form
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from database import get_db
 from repositories.user_repository.user_repository import UserRepository
 from facade import register_user
@@ -39,13 +39,15 @@ async def sign_up(params: UserSignUp, db: Session = Depends(get_db)):
 
 
 class UserSignIn(BaseModel):
-    email: EmailStr
+    # Login identifiers may include reserved development domains such as
+    # ``quboolmatch.test``. Signup remains strictly validated with EmailStr.
+    email: str = Field(min_length=3, max_length=320)
     password: str
 
 
 @router.post("/sign_in")
 async def sign_in(params: UserSignIn, db: Session = Depends(get_db)):
-    user = UserRepository.get_by_email(db, params.email)
+    user = UserRepository.get_by_email(db, params.email.strip().lower())
 
     if user and user.check_password(params.password):
         token = Token.generate_and_sign(user_id=str(user.id))

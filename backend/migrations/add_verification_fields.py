@@ -18,8 +18,6 @@ def migrate_add_verification_fields():
         """
         ALTER TABLE users 
         ADD COLUMN IF NOT EXISTS nid_image_path VARCHAR,
-        ADD COLUMN IF NOT EXISTS verification_date DATE,
-        ADD COLUMN IF NOT EXISTS verification_time TIME,
         ADD COLUMN IF NOT EXISTS verification_status VARCHAR DEFAULT 'pending',
         ADD COLUMN IF NOT EXISTS verification_notes TEXT,
         ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP;

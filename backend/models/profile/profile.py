@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, Text, Float, ForeignKey, LargeBinary
+from sqlalchemy import Column, String, Boolean, Date, DateTime, Integer, Text, Float, ForeignKey, LargeBinary
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -13,12 +13,14 @@ class Profile(Base):
     
     # Personal Information
     location = Column(String, nullable=True)
+    date_of_birth = Column(Date, nullable=True)
     father_name = Column(String, nullable=True)
     mother_name = Column(String, nullable=True)
     guardian_name = Column(String, nullable=True)
     guardian_relation = Column(String, nullable=True)
     guardian_relation_other = Column(String, nullable=True)
     guardian_contact_number = Column(String, nullable=True)
+    identity_verified = Column(Boolean, default=False, nullable=False)
     academic_background = Column(String, nullable=True)
     profession = Column(String, nullable=True)
     marital_status = Column(String, nullable=True)
@@ -102,6 +104,7 @@ class Profile(Base):
         self.id = str(uuid.uuid4())
         self.user_id = user_id
         self.is_completed = False
+        self.identity_verified = False
         
         # Set all optional fields
         for key, value in kwargs.items():
@@ -140,12 +143,14 @@ class Profile(Base):
             'id': self.id,
             'user_id': self.user_id,
             'location': self.location,
+            'date_of_birth': self.date_of_birth.isoformat() if self.date_of_birth else None,
             'father_name': self.father_name,
             'mother_name': self.mother_name,
             'guardian_name': self.guardian_name,
             'guardian_relation': self.guardian_relation,
             'guardian_relation_other': self.guardian_relation_other,
             'guardian_contact_number': self.guardian_contact_number,
+            'identity_verified': self.identity_verified,
             'academic_background': self.academic_background,
             'profession': self.profession,
             'marital_status': self.marital_status,

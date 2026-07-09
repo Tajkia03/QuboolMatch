@@ -6,13 +6,15 @@ interface NIDImageDisplayProps {
   className?: string;
   fallbackText?: string;
   previewImage?: File | null; // For showing preview of newly selected image
+  fetchStoredImage?: boolean;
 }
 
 const NIDImageDisplay: React.FC<NIDImageDisplayProps> = ({
   userId,
   className = "w-full h-48 object-cover border rounded-lg",
   fallbackText = "No NID image uploaded",
-  previewImage = null
+  previewImage = null,
+  fetchStoredImage = true,
 }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,6 +29,13 @@ const NIDImageDisplay: React.FC<NIDImageDisplayProps> = ({
       return () => {
         URL.revokeObjectURL(url);
       };
+    }
+
+    if (!fetchStoredImage) {
+      setImageUrl(null);
+      setLoading(false);
+      setError(fallbackText);
+      return;
     }
 
     const fetchImage = async () => {
@@ -81,7 +90,7 @@ const NIDImageDisplay: React.FC<NIDImageDisplayProps> = ({
         URL.revokeObjectURL(imageUrl);
       }
     };
-  }, [userId, fallbackText, previewImage]);
+  }, [userId, fallbackText, previewImage, fetchStoredImage]);
 
   // Cleanup object URL when component unmounts
   useEffect(() => {

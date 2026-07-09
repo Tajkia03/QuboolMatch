@@ -85,3 +85,9 @@ coverage.xml
 
 # Local seed data
 ml_artifacts/clean_profiles.csv
+
+# Runtime database-trained recommendation artifacts
+recommendation/artifacts/versions/
+recommendation/artifacts/.staging-*/
+recommendation/artifacts/active.json
+recommendation/artifacts/active.json.tmp

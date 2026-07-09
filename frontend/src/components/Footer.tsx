@@ -9,13 +9,13 @@ const Footer = () => {
   const showAdminLink = location.pathname === '/' && !isLoggedIn;
 
   return (
-    <footer className="bg-gray-900 text-white">
+    <footer className="bg-[#302229] text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid lg:grid-cols-4 gap-12">
           {/* Brand Section */}
           <div className="lg:col-span-1">
             <div className="flex items-center space-x-2 mb-6">
-              <div className="bg-gradient-to-br from-rose-500 to-pink-600 p-2 rounded-xl">
+              <div className="rounded-xl bg-gradient-to-br from-[#a83f62] to-[#75405c] p-2">
                 <Heart className="h-6 w-6 text-white" fill="currentColor" />
               </div>
               <span className="text-2xl font-bold text-white">Qubool Match</span>
@@ -25,16 +25,16 @@ const Footer = () => {
               through safe, respectful, and meaningful connections.
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="bg-gray-800 p-3 rounded-xl hover:bg-rose-600 transition-colors duration-300">
+              <a href="#" className="rounded-xl bg-white/10 p-3 transition-colors duration-300 hover:bg-[#a83f62]">
                 <Facebook className="h-5 w-5" />
               </a>
-              <a href="#" className="bg-gray-800 p-3 rounded-xl hover:bg-blue-500 transition-colors duration-300">
+              <a href="#" className="rounded-xl bg-white/10 p-3 transition-colors duration-300 hover:bg-[#a83f62]">
                 <Twitter className="h-5 w-5" />
               </a>
-              <a href="#" className="bg-gray-800 p-3 rounded-xl hover:bg-pink-600 transition-colors duration-300">
+              <a href="#" className="rounded-xl bg-white/10 p-3 transition-colors duration-300 hover:bg-[#a83f62]">
                 <Instagram className="h-5 w-5" />
               </a>
-              <a href="#" className="bg-gray-800 p-3 rounded-xl hover:bg-red-600 transition-colors duration-300">
+              <a href="#" className="rounded-xl bg-white/10 p-3 transition-colors duration-300 hover:bg-[#a83f62]">
                 <Youtube className="h-5 w-5" />
               </a>
             </div>
