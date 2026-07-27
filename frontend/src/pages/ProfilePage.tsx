@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { getAccessToken, API_BASE_URL } from "../services/api";
 import IntroVideoDisplay from "../components/IntroVideoDisplay";
 import MedicalDocumentsDisplay from "../components/MedicalDocumentsDisplay";
+import { getProfileCompletion } from "../utils/profileCompletion";
 
 // Define interface for the lifestyle preferences
 interface LifestylePreferences {
@@ -18,6 +19,7 @@ interface ProfileData {
   dateOfBirth: string;
   identityVerified: boolean;
   gender: string;
+  address: string;
   location: string;
   fatherName: string;
   motherName: string;
@@ -83,21 +85,6 @@ interface ProfileData {
   additionalComments: string;
 }
 
-interface CompletionSection {
-  completed: number;
-  total: number;
-  percent: number;
-}
-
-interface CompletionResult {
-  overallPercent: number;
-  sections: {
-    personal: CompletionSection;
-    health: CompletionSection;
-    preferences: CompletionSection;
-  };
-}
-
 interface ProfileSectionCardProps {
   title: string;
   description?: string;
@@ -158,6 +145,17 @@ const SummaryValue: React.FC<{ value: string }> = ({ value }) => {
   ) : (
     <EmptyValue />
   );
+};
+
+const toGuardianLocalNumber = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  if (digits.startsWith("880")) {
+    return digits.slice(3, 13);
+  }
+  if (digits.length === 11 && digits.startsWith("0")) {
+    return digits.slice(1, 11);
+  }
+  return digits.slice(0, 10);
 };
 
 const parseAdditionalComments = (value: string | null | undefined) => {
@@ -236,77 +234,6 @@ const parseAdditionalComments = (value: string | null | undefined) => {
   };
 };
 
-const isFilled = (value: unknown): boolean => {
-  if (value === null || value === undefined) return false;
-  if (typeof value === "string") return value.trim().length > 0;
-  if (typeof value === "number") return Number.isFinite(value);
-  if (typeof value === "boolean") return value === true;
-  if (Array.isArray(value)) return value.length > 0;
-  return false;
-};
-
-const getSectionCompletion = (fields: unknown[]): CompletionSection => {
-  const total = fields.length;
-  const completed = fields.filter(isFilled).length;
-  const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  return { completed, total, percent };
-};
-
-const getProfileCompletion = (profile: ProfileData): CompletionResult => {
-  const personalFields = [
-    profile.name,
-    profile.age,
-    profile.dateOfBirth,
-    profile.gender,
-    profile.location,
-    profile.religion,
-    profile.maritalStatus,
-    profile.academicBackground,
-    profile.profession,
-    profile.fatherName,
-    profile.motherName,
-    profile.guardianName,
-    profile.guardianRelation,
-    profile.guardianContactNumber
-  ];
-
-  const healthFields = [
-    profile.overallHealthStatus,
-    profile.medicalHistory,
-    profile.longTermCondition,
-    profile.longTermConditionDescription,
-    profile.bloodGroup,
-    profile.geneticConditions,
-    profile.fertilityAwareness,
-    profile.disability,
-    profile.disabilityDescription
-  ];
-
-  const preferenceFields = [
-    profile.preferredAgeMin,
-    profile.preferredAgeMax,
-    profile.preferredReligion,
-    profile.preferredLocation
-  ];
-
-  const personal = getSectionCompletion(personalFields);
-  const health = getSectionCompletion(healthFields);
-  const preferences = getSectionCompletion(preferenceFields);
-
-  const totalCompleted = personal.completed + health.completed + preferences.completed;
-  const totalFields = personal.total + health.total + preferences.total;
-  const overallPercent = totalFields > 0 ? Math.round((totalCompleted / totalFields) * 100) : 0;
-
-  return {
-    overallPercent,
-    sections: {
-      personal,
-      health,
-      preferences
-    }
-  };
-};
-
 const calculateAgeFromDateOfBirth = (dateOfBirth: string): string => {
   if (!dateOfBirth) {
     return "";
@@ -356,6 +283,7 @@ const ProfilePage: React.FC = () => {
     dateOfBirth: "",
     identityVerified: false,
     gender: "",
+    address: "",
     location: "",
     fatherName: "",
     motherName: "",
@@ -433,9 +361,18 @@ const ProfilePage: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> | { target: { name: string; value: any; type?: string; checked?: boolean } }) => {
     const { name, value, type } = e.target as HTMLInputElement & { type?: string };
     const checked = (e.target as HTMLInputElement).checked;
-    const lockedIdentityFields = new Set(["name", "dateOfBirth", "fatherName", "motherName"]);
+    const lockedIdentityFields = new Set(["name", "dateOfBirth", "fatherName", "motherName", "address", "bloodGroup"]);
 
     if (profile.identityVerified && lockedIdentityFields.has(name)) {
+      return;
+    }
+
+    if (name === "guardianContactNumber") {
+      const localNumber = toGuardianLocalNumber(String(value));
+      setProfile((prev) => ({
+        ...prev,
+        guardianContactNumber: localNumber ? `+880${localNumber}` : ""
+      }));
       return;
     }
 
@@ -493,9 +430,14 @@ const ProfilePage: React.FC = () => {
         // Handle individual genetic condition checkboxes
         const conditionValue = name.replace('geneticCondition_', '');
         setProfile((prev) => {
-          const conditions = [...prev.geneticConditions];
+          let conditions = [...prev.geneticConditions];
+          if (conditionValue === "None") {
+            return { ...prev, geneticConditions: checked ? ["None"] : [] };
+          }
+
           if (checked && !conditions.includes(conditionValue)) {
             conditions.push(conditionValue);
+            conditions = conditions.filter((condition) => condition !== "None");
           } else if (!checked) {
             const index = conditions.indexOf(conditionValue);
             if (index > -1) {
@@ -589,6 +531,7 @@ const ProfilePage: React.FC = () => {
         date_of_birth: profile.dateOfBirth || null,
         gender: profile.gender,
         religion: profile.religion,
+        address: profile.address,
         location: profile.location,
         father_name: profile.fatherName,
         mother_name: profile.motherName,
@@ -676,6 +619,7 @@ const ProfilePage: React.FC = () => {
 
       const result = await response.json();
       console.log("Profile Saved:", result);
+      window.dispatchEvent(new Event("profile-completion-refresh"));
       alert("Profile information saved successfully!");
     } catch (error) {
       console.error('Error saving profile:', error);
@@ -745,6 +689,7 @@ const ProfilePage: React.FC = () => {
               dateOfBirth: data.date_of_birth || prev.dateOfBirth || "",
               identityVerified: Boolean(data.identity_verified),
               gender: data.gender || prev.gender || "",
+              address: data.address || prev.address || "",
               location: data.location || prev.location || "",
               fatherName: data.father_name || prev.fatherName || "",
               motherName: data.mother_name || prev.motherName || "",
@@ -919,8 +864,8 @@ const ProfilePage: React.FC = () => {
         </ProfileSectionCard>
         </aside>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <nav className="sticky top-3 z-30 overflow-x-auto rounded-2xl border border-purple-100 bg-white/95 p-2 shadow-lg shadow-purple-100/60 backdrop-blur-md" aria-label="Profile sections">
+        <div className="space-y-6">
+          <nav className="sticky top-20 z-50 overflow-x-auto rounded-2xl border border-purple-100 bg-white/95 p-2 shadow-lg shadow-purple-100/60 backdrop-blur-md" aria-label="Profile sections">
             <div className="flex min-w-max gap-2">
               {[
                 ["Overview", "profile-profile-summary"],
@@ -949,6 +894,7 @@ const ProfilePage: React.FC = () => {
             </div>
           </nav>
 
+          <form onSubmit={handleSubmit} className="space-y-6">
           {/* Profile Header */}
           <ProfileHeader
             profile={profile}
@@ -986,7 +932,8 @@ const ProfilePage: React.FC = () => {
               Save profile changes
             </button>
           </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -1070,6 +1017,34 @@ const ProfileHeader: React.FC<{
               {renderMissing(profile.dateOfBirth)}
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700">Address</label>
+              <textarea
+                name="address"
+                value={profile.address}
+                onChange={onInputChange}
+                readOnly={profile.identityVerified}
+                aria-readonly={profile.identityVerified}
+                className={profile.identityVerified ? identityFieldClass : standardFieldClass}
+                placeholder="Not added yet"
+                rows={3}
+              />
+              {renderMissing(profile.address)}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Blood Group</label>
+              <input
+                type="text"
+                name="bloodGroup"
+                value={profile.bloodGroup}
+                onChange={onInputChange}
+                readOnly={profile.identityVerified}
+                aria-readonly={profile.identityVerified}
+                className={profile.identityVerified ? identityFieldClass : standardFieldClass}
+                placeholder="Not added yet"
+              />
+              {renderMissing(profile.bloodGroup)}
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700">NID Status</label>
               <div className="mt-2">
                 <VerifiedBadge verified={profile.identityVerified} />
@@ -1135,7 +1110,7 @@ const ProfileHeader: React.FC<{
               {renderMissing(profile.maritalStatus)}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Location</label>
+              <label className="block text-sm font-medium text-gray-700">Current Address</label>
               <input
                 type="text"
                 name="location"
@@ -1197,15 +1172,24 @@ const ProfileHeader: React.FC<{
             )}
             <div>
               <label className="block text-sm font-medium text-gray-700">Guardian Contact Number</label>
-              <input
-                type="tel"
-                name="guardianContactNumber"
-                value={profile.guardianContactNumber}
-                onChange={onInputChange}
-                required
-                className={standardFieldClass}
-                placeholder="Enter guardian contact number"
-              />
+              <div className="mt-1 flex overflow-hidden rounded-md border border-gray-300 shadow-sm focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500">
+                <span className="inline-flex items-center border-r border-gray-300 bg-gray-50 px-3 text-sm font-medium text-gray-700">
+                  +880
+                </span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
+                  name="guardianContactNumber"
+                  value={toGuardianLocalNumber(profile.guardianContactNumber)}
+                  onChange={onInputChange}
+                  required
+                  className="block w-full border-0 px-4 py-2 shadow-sm outline-none focus:ring-0"
+                  placeholder="1XXXXXXXXX"
+                />
+              </div>
+              <p className="mt-1 text-xs text-gray-500">Enter the 10 digits after +880.</p>
               {renderMissing(profile.guardianContactNumber)}
             </div>
           </div>
@@ -1284,7 +1268,7 @@ const PersonalInfoSection: React.FC<{
 
         {/* Introductory Video */}
         <div className="scroll-mt-28 rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-[0_8px_25px_rgba(59,130,246,0.06)] sm:p-6">
-          <label className="block text-sm font-medium text-gray-700">Introductory Video</label>
+          <label className="block text-sm font-medium text-gray-700">Introductory Video (Optional)</label>
           <div className="mt-1 flex items-center">
             <label
               htmlFor="introVideo"
@@ -1311,7 +1295,7 @@ const PersonalInfoSection: React.FC<{
             )}
           </div>
           <p className="mt-1 text-sm text-gray-500">
-            Upload a short video introduction (max 60 seconds, MP4 format recommended)
+            Upload a short video introduction if you want. This is not counted in profile completion.
           </p>
           <div className="mt-3">
             <IntroVideoDisplay 
@@ -1419,7 +1403,12 @@ const PersonalInfoSection: React.FC<{
                 name="bloodGroup"
                 value={profile.bloodGroup}
                 onChange={onInputChange}
-                className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={profile.identityVerified}
+                className={`mt-1 block w-full px-4 py-2 border rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 ${
+                  profile.identityVerified
+                    ? "cursor-not-allowed border-violet-200 bg-white/60 text-gray-600"
+                    : "border-gray-300"
+                }`}
               >
                 <option value="">Select Blood Group</option>
                 <option value="A+">A+</option>
@@ -1438,9 +1427,21 @@ const PersonalInfoSection: React.FC<{
           {/* Genetic Conditions */}
           <div className="bg-gray-50 p-4 rounded-lg mb-4">
             <h4 className="text-md font-medium text-gray-800 mb-3">Genetic & Medical Conditions</h4>
-            <p className="text-sm text-gray-500 mb-3">Please indicate if you have any of the following conditions:</p>
+            <p className="text-sm text-gray-500 mb-3">Please indicate if you have any of the following conditions, or select none if they do not apply.</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 mb-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="noGeneticConditions"
+                  name="geneticCondition_None"
+                  checked={profile.geneticConditions.includes('None')}
+                  onChange={onInputChange}
+                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                />
+                <label htmlFor="noGeneticConditions" className="ml-2 block text-sm text-gray-700">None of these</label>
+              </div>
+
               <div className="flex items-center">
                 <input
                   type="checkbox"
@@ -1498,7 +1499,6 @@ const PersonalInfoSection: React.FC<{
                   onChange={onInputChange}
                   className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                 />
-                <label htmlFor="cancer" className="ml-2 block text-sm text-gray-700">Cancer</label>
                 <label htmlFor="cancer" className="ml-2 block text-sm text-gray-700">Cancer</label>
               </div>
             </div>
@@ -2256,7 +2256,7 @@ const ProfileSummaryHeader: React.FC<{
               <SummaryValue value={profile.gender} />
             </div>
             <div className="rounded-lg border border-purple-200 bg-white/80 p-3">
-              <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Location</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Current Address</div>
               <SummaryValue value={profile.location} />
             </div>
             <div className="rounded-lg border border-purple-200 bg-white/80 p-3">

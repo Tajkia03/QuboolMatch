@@ -5,6 +5,8 @@ import { useAuth } from "../context/AuthContext";
 import { API_BASE_URL } from "../services/api";
 
 const SignIn: React.FC = () => {
+  const PENDING_SIGNUP_USER_ID_KEY = "pendingSignupUserId";
+  const PENDING_SIGNUP_EMAIL_KEY = "pendingSignupEmail";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -37,12 +39,17 @@ const SignIn: React.FC = () => {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to sign in");
-      }
-
       const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 403 && data?.email_verification_required) {
+          sessionStorage.setItem(PENDING_SIGNUP_USER_ID_KEY, data.user_id);
+          sessionStorage.setItem(PENDING_SIGNUP_EMAIL_KEY, data.email);
+          navigate("/verify-email", { replace: true });
+          return;
+        }
+        throw new Error(data?.detail || "Failed to sign in");
+      }
       
       // Use the login function from AuthContext
       login(data.access_token);

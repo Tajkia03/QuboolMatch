@@ -35,6 +35,8 @@ class User(Base):
     identity_verified = Column(Boolean, default=False, nullable=False)
     is_deleted = Column(Boolean, default=False)
     is_archived = Column(Boolean, default=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verified_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(
         timezone.utc), nullable=False)
     
@@ -42,6 +44,9 @@ class User(Base):
     nid_image_data = Column(LargeBinary, nullable=True)  # Binary data of uploaded NID image
     nid_image_filename = Column(String, nullable=True)  # Original filename
     nid_image_content_type = Column(String, nullable=True)  # MIME type (image/jpeg, etc.)
+    nid_back_image_data = Column(LargeBinary, nullable=True)
+    nid_back_image_filename = Column(String, nullable=True)
+    nid_back_image_content_type = Column(String, nullable=True)
     verification_status = Column(String, default="not_submitted")  # not_submitted, pending, verified, rejected
     verification_notes = Column(Text, nullable=True)  # Additional notes for verification
     verified_at = Column(DateTime, nullable=True)  # When verification was completed
@@ -51,6 +56,8 @@ class User(Base):
     ocr_mother_name = Column(String, nullable=True)
     ocr_date_of_birth = Column(Date, nullable=True)
     ocr_nid_number = Column(String, nullable=True)
+    ocr_address = Column(Text, nullable=True)
+    ocr_blood_group = Column(String, nullable=True)
     ocr_image_quality = Column(String, nullable=True)
     ocr_warnings = Column(JSON, nullable=True)
     ocr_confirmed = Column(Boolean, default=False, nullable=False)
@@ -83,6 +90,8 @@ class User(Base):
         self.identity_verified = False
         self.is_deleted = False
         self.is_archived = False
+        self.email_verified = False
+        self.email_verified_at = None
         self.verification_status = "not_submitted"
         self.guardian_verification_status = "not_submitted"
         self.ocr_confirmed = False
@@ -106,6 +115,8 @@ class User(Base):
 
     def update_verification_info(self, nid_image_data: bytes = None, nid_image_filename: str = None,
                                nid_image_content_type: str = None,
+                               nid_back_image_data: bytes = None, nid_back_image_filename: str = None,
+                               nid_back_image_content_type: str = None,
                                verification_notes: str = None):
         if nid_image_data:
             self.nid_image_data = nid_image_data
@@ -113,6 +124,12 @@ class User(Base):
             self.nid_image_filename = nid_image_filename
         if nid_image_content_type:
             self.nid_image_content_type = nid_image_content_type
+        if nid_back_image_data:
+            self.nid_back_image_data = nid_back_image_data
+        if nid_back_image_filename:
+            self.nid_back_image_filename = nid_back_image_filename
+        if nid_back_image_content_type:
+            self.nid_back_image_content_type = nid_back_image_content_type
         if verification_notes:
             self.verification_notes = verification_notes
         # Keep status as pending until admin verifies
@@ -127,6 +144,8 @@ class User(Base):
         ocr_mother_name: Optional[str] = None,
         ocr_date_of_birth=None,
         ocr_nid_number: Optional[str] = None,
+        ocr_address: Optional[str] = None,
+        ocr_blood_group: Optional[str] = None,
         ocr_image_quality: Optional[str] = None,
         ocr_warnings=None,
         processed_at=None,
@@ -142,6 +161,8 @@ class User(Base):
         self.ocr_mother_name = ocr_mother_name
         self.ocr_date_of_birth = ocr_date_of_birth
         self.ocr_nid_number = ocr_nid_number
+        self.ocr_address = ocr_address
+        self.ocr_blood_group = ocr_blood_group
         self.ocr_image_quality = ocr_image_quality
         self.ocr_warnings = ocr_warnings or []
         self.ocr_confirmed = False

@@ -4,9 +4,13 @@ Run this script to create an initial admin user for the system
 """
 import os
 import sys
+import bcrypt
 from sqlalchemy.orm import Session
 from database import get_db, engine
 from models.user.user import User
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 def create_admin_user(email: str, password: str):
     """Create an admin user with the given email and password"""
@@ -17,13 +21,20 @@ def create_admin_user(email: str, password: str):
         existing_user = db.query(User).filter(User.email == email).first()
         if existing_user:
             if existing_user.is_admin:
-                print(f"User {email} already exists and is already an admin!")
-                return False
+                existing_user.hashed_password = hash_password(password)
+                if not existing_user.is_archived:
+                    existing_user.archive()
+                    print(f"Existing admin user {email} has been archived from matchmaking surfaces.")
+                db.commit()
+                print(f"User {email} already exists and is already an admin. Password has been reset!")
+                return True
             else:
                 # Promote existing user to admin
                 existing_user.promote_to_admin()
+                existing_user.archive()
+                existing_user.hashed_password = hash_password(password)
                 db.commit()
-                print(f"User {email} has been promoted to admin!")
+                print(f"User {email} has been promoted to admin and password has been reset!")
                 return True
         
         # Create new admin user
@@ -36,6 +47,7 @@ def create_admin_user(email: str, password: str):
             age=30,
             is_admin=True
         )
+        admin_user.archive()
         db.add(admin_user)
         db.commit()
         print(f"Admin user {email} created successfully!")

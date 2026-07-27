@@ -12,6 +12,8 @@ interface PendingUser {
   guardian_verification_status: string;
   has_nid_image: boolean;
   nid_image_filename: string | null;
+  has_nid_back_image?: boolean;
+  nid_back_image_filename?: string | null;
   verification_notes: string | null;
   created_at: string;
   ocr_name_match_status?: string | null;
@@ -23,6 +25,8 @@ interface PendingUser {
   ocr_mother_name?: string | null;
   ocr_date_of_birth?: string | null;
   ocr_nid_number?: string | null;
+  ocr_address?: string | null;
+  ocr_blood_group?: string | null;
   ocr_image_quality?: string | null;
   ocr_warnings?: string[] | null;
 }
@@ -206,17 +210,18 @@ const VerifyUsers: React.FC = () => {
     }
   };
 
-  const viewNIDImage = async (userId: string) => {
+  const viewNIDImage = async (userId: string, side: 'front' | 'back' = 'front') => {
     try {
       const token = localStorage.getItem('adminAccessToken');
-      const response = await fetch(`${API_BASE_URL}/verification/image/${userId}`, {
+      const imagePath = side === 'back' ? 'image-back' : 'image';
+      const response = await fetch(`${API_BASE_URL}/verification/${imagePath}/${userId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch NID image');
+        throw new Error(`Failed to fetch NID ${side} image`);
       }
 
       const blob = await response.blob();
@@ -225,7 +230,7 @@ const VerifyUsers: React.FC = () => {
       // Open image in new window
       window.open(imageUrl, '_blank');
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to view NID image');
+      alert(error instanceof Error ? error.message : `Failed to view NID ${side} image`);
     }
   };
 
@@ -452,16 +457,28 @@ const VerifyUsers: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {user.has_nid_image ? (
-                      <button
-                        onClick={() => viewNIDImage(user.id)}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                      >
-                        View NID Image
-                      </button>
-                    ) : (
-                        <span className="text-gray-400 text-sm">No image</span>
-                    )}
+                    <div className="flex flex-col items-start gap-1">
+                      {user.has_nid_image ? (
+                        <button
+                          onClick={() => viewNIDImage(user.id, 'front')}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        >
+                          View Front Image
+                        </button>
+                      ) : (
+                        <span className="text-gray-400 text-sm">No front image</span>
+                      )}
+                      {user.has_nid_back_image ? (
+                        <button
+                          onClick={() => viewNIDImage(user.id, 'back')}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        >
+                          View Back Image
+                        </button>
+                      ) : (
+                        <span className="text-gray-400 text-sm">No back image</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex flex-col items-start gap-2">
@@ -536,11 +553,22 @@ const VerifyUsers: React.FC = () => {
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={() => viewNIDImage(selectedUser.id)}
+                onClick={() => viewNIDImage(selectedUser.id, 'front')}
                 className="text-blue-600 hover:text-blue-800 text-sm font-medium"
               >
-                View NID Image
+                View Front Image
               </button>
+              {selectedUser.has_nid_back_image ? (
+                <button
+                  type="button"
+                  onClick={() => viewNIDImage(selectedUser.id, 'back')}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                >
+                  View Back Image
+                </button>
+              ) : (
+                <span className="text-sm text-gray-400">No back image submitted</span>
+              )}
               <div className="text-sm text-gray-500">
                 {selectedUser.email}
               </div>
@@ -599,6 +627,38 @@ const VerifyUsers: React.FC = () => {
                     </div>
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getComparisonBadge(selectedUser.ocr_dob_match).className}`}>
                       {getComparisonBadge(selectedUser.ocr_dob_match).label}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-800">Address</h4>
+                      <p className="mt-1 text-sm text-gray-600 whitespace-pre-wrap">
+                        OCR: {selectedUser.ocr_address || 'Not available'}
+                      </p>
+                    </div>
+                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                      Back Side OCR
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-gray-200 p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-800">Blood Group</h4>
+                      <p className="mt-1 text-sm text-gray-600">
+                        OCR: {selectedUser.ocr_blood_group || 'Not available'}
+                      </p>
+                    </div>
+                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                      Back Side OCR
                     </span>
                   </div>
                 </div>

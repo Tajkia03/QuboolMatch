@@ -13,6 +13,8 @@ type ExtractedNidInformation = {
   mother_name: string | null;
   date_of_birth: string | null;
   nid_number: string | null;
+  address: string | null;
+  blood_group: string | null;
   image_quality: string | null;
   warnings: string[];
 };
@@ -28,12 +30,16 @@ type VerificationStatusResponse = {
   ocr_mother_name?: string | null;
   ocr_date_of_birth?: string | null;
   ocr_nid_number?: string | null;
+  ocr_address?: string | null;
+  ocr_blood_group?: string | null;
   ocr_image_quality?: string | null;
   ocr_warnings?: string[] | null;
   ocr_confirmed?: boolean;
   ocr_processed_at?: string | null;
   has_nid_image?: boolean;
   nid_image_filename?: string | null;
+  has_nid_back_image?: boolean;
+  nid_back_image_filename?: string | null;
 };
 
 const hasSavedOcrData = (statusData: VerificationStatusResponse) =>
@@ -43,6 +49,8 @@ const hasSavedOcrData = (statusData: VerificationStatusResponse) =>
       statusData.ocr_mother_name ||
       statusData.ocr_date_of_birth ||
       statusData.ocr_nid_number ||
+      statusData.ocr_address ||
+      statusData.ocr_blood_group ||
       statusData.ocr_image_quality ||
       (statusData.ocr_warnings && statusData.ocr_warnings.length > 0) ||
       statusData.ocr_processed_at
@@ -51,6 +59,7 @@ const hasSavedOcrData = (statusData: VerificationStatusResponse) =>
 const NIDVerification: React.FC = () => {
   const ONBOARDING_PENDING_KEY = "verificationOnboardingPending";
   const [file, setFile] = useState<File | null>(null);
+  const [backFile, setBackFile] = useState<File | null>(null);
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -62,6 +71,7 @@ const NIDVerification: React.FC = () => {
   const [ocrConfirmed, setOcrConfirmed] = useState(false);
   const [ocrData, setOcrData] = useState<ExtractedNidInformation | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const backFileInputRef = useRef<HTMLInputElement | null>(null);
   const navigate = useNavigate();
 
   const backendVerificationStatus = currentStatus?.verification_status ?? null;
@@ -108,6 +118,8 @@ const NIDVerification: React.FC = () => {
               mother_name: statusData.ocr_mother_name ?? null,
               date_of_birth: statusData.ocr_date_of_birth ?? null,
               nid_number: statusData.ocr_nid_number ?? null,
+              address: statusData.ocr_address ?? null,
+              blood_group: statusData.ocr_blood_group ?? null,
               image_quality: statusData.ocr_image_quality ?? null,
               warnings: statusData.ocr_warnings ?? [],
             });
@@ -150,8 +162,21 @@ const NIDVerification: React.FC = () => {
     }
   };
 
+  const handleBackFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isVerificationLocked) {
+      return;
+    }
+    if (e.target.files && e.target.files[0]) {
+      setBackFile(e.target.files[0]);
+      setOcrStatus("idle");
+      setOcrError("");
+      setOcrConfirmed(false);
+      setOcrData(null);
+    }
+  };
+
   const extractNidInformation = async () => {
-    if (isVerificationLocked || !file) {
+    if (isVerificationLocked || !file || !backFile) {
       return;
     }
 
@@ -168,6 +193,7 @@ const NIDVerification: React.FC = () => {
 
       const formData = new FormData();
       formData.append("nid_image", file);
+      formData.append("nid_back_image", backFile);
 
       const response = await fetch(`${API_BASE_URL}/verification/extract-nid`, {
         method: "POST",
@@ -194,6 +220,8 @@ const NIDVerification: React.FC = () => {
         mother_name: data.mother_name ?? null,
         date_of_birth: data.date_of_birth ?? null,
         nid_number: data.nid_number ?? null,
+        address: data.address ?? null,
+        blood_group: data.blood_group ?? null,
         image_quality: data.image_quality ?? null,
         warnings: Array.isArray(data.warnings) ? data.warnings : [],
       });
@@ -222,12 +250,16 @@ const NIDVerification: React.FC = () => {
       return;
     }
     setFile(null);
+    setBackFile(null);
     setOcrStatus("idle");
     setOcrError("");
     setOcrConfirmed(false);
     setOcrData(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+    if (backFileInputRef.current) {
+      backFileInputRef.current.value = "";
     }
   };
 
@@ -239,11 +271,25 @@ const NIDVerification: React.FC = () => {
 
     try {
       if (!file) {
-        throw new Error("Please select a NID image file");
+        throw new Error("Please select the front side of your NID");
+      }
+
+      if (!backFile) {
+        throw new Error("Please select the back side of your NID");
       }
 
       const formData = new FormData();
       formData.append("nid_image", file);
+      formData.append("nid_back_image", backFile);
+      if (ocrData) {
+        formData.append("ocr_name", ocrData.name ?? "");
+        formData.append("ocr_father_name", ocrData.father_name ?? "");
+        formData.append("ocr_mother_name", ocrData.mother_name ?? "");
+        formData.append("ocr_date_of_birth", ocrData.date_of_birth ?? "");
+        formData.append("ocr_nid_number", ocrData.nid_number ?? "");
+        formData.append("ocr_address", ocrData.address ?? "");
+        formData.append("ocr_blood_group", ocrData.blood_group ?? "");
+      }
       if (notes.trim()) {
         formData.append("verification_notes", notes);
       }
@@ -349,50 +395,82 @@ const NIDVerification: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="relative min-h-screen flex items-center justify-center bg-gray-100">
       <div className="w-full max-w-lg bg-white shadow-lg rounded-lg p-6">
         <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
           Verify Yourself
         </h2>
         <form id="nidVerificationForm" onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label htmlFor="nidImage" className="block text-sm font-medium text-gray-700">
-              Upload an image of the front part of your NID
-            </label>
-            <input
-              type="file"
-              id="nidImage"
-              ref={fileInputRef}
-              accept="image/*"
-              onChange={handleFileChange}
-              disabled={isVerificationLocked}
-              className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            />
-            {file && <p className="mt-2 text-sm text-gray-600">Selected File: {file.name}</p>}
-            <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
-              <p className="font-medium text-gray-700">Photo tips:</p>
-              <ul className="mt-2 space-y-1">
-                <li>- Keep all four corners visible.</li>
-                <li>- Avoid glare, shadows, and blur.</li>
-                <li>- Make sure all text is readable.</li>
-              </ul>
+          <div className="mb-4 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start">
+              <div>
+                <label htmlFor="nidImage" className="block text-sm font-medium text-gray-700">
+                  Upload an image of the front part of your NID
+                </label>
+                <input
+                  type="file"
+                  id="nidImage"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  disabled={isVerificationLocked}
+                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+                {file && <p className="mt-2 text-sm text-gray-600">Selected File: {file.name}</p>}
+                <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+                  <p className="font-medium text-gray-700">Photo tips:</p>
+                  <ul className="mt-2 space-y-1">
+                    <li>- Keep all four corners visible.</li>
+                    <li>- Avoid glare, shadows, and blur.</li>
+                    <li>- Make sure all text is readable.</li>
+                  </ul>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Front Preview
+                </label>
+                <NIDImageDisplay
+                  className="w-full h-40 object-cover border rounded-lg"
+                  fallbackText="No front image yet"
+                  previewImage={file}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              NID Front-Side Preview
-            </label>
-            <NIDImageDisplay 
-              className="w-full h-48 object-cover border rounded-lg"
-              fallbackText="No NID image uploaded yet"
-              previewImage={file}
-            />
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start">
+              <div>
+                <label htmlFor="nidBackImage" className="block text-sm font-medium text-gray-700">
+                  Upload an image of the back side of your NID
+                </label>
+                <input
+                  type="file"
+                  id="nidBackImage"
+                  ref={backFileInputRef}
+                  accept="image/*"
+                  onChange={handleBackFileChange}
+                  disabled={isVerificationLocked}
+                  className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+                {backFile && <p className="mt-2 text-sm text-gray-600">Selected File: {backFile.name}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Back Preview
+                </label>
+                <NIDImageDisplay
+                  className="w-full h-40 object-cover border rounded-lg"
+                  fallbackText="No back image yet"
+                  previewImage={backFile}
+                />
+              </div>
+            </div>
+
             <button
               type="button"
               onClick={handleExtractClick}
-              disabled={isVerificationLocked || !file || ocrStatus === "processing"}
-              className="mt-3 inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+              disabled={isVerificationLocked || !file || !backFile || ocrStatus === "processing"}
+              className="inline-flex w-full items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-400"
             >
               {ocrStatus === "processing" ? "Reading Your NID Information..." : "Extract NID Information"}
             </button>
@@ -474,6 +552,30 @@ const NIDVerification: React.FC = () => {
                     readOnly={isVerificationLocked}
                     className="mt-1 block w-full rounded-md border border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     placeholder="Enter NID number"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">Address</label>
+                  <textarea
+                    value={ocrData.address ?? ""}
+                    onChange={(e) => updateOcrField("address", e.target.value)}
+                    disabled={isVerificationLocked}
+                    readOnly={isVerificationLocked}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    placeholder="Enter address"
+                    rows={3}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">Blood Group</label>
+                  <input
+                    type="text"
+                    value={ocrData.blood_group ?? ""}
+                    onChange={(e) => updateOcrField("blood_group", e.target.value)}
+                    disabled={isVerificationLocked}
+                    readOnly={isVerificationLocked}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    placeholder="Enter blood group"
                   />
                 </div>
               </div>

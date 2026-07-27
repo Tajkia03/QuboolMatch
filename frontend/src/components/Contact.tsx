@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, Mail, MapPin, Clock, MessageCircle, HeadphonesIcon } from 'lucide-react';
+import { Phone, Mail, MessageCircle, HeadphonesIcon } from 'lucide-react';
 
 const Contact = () => {
   return (
@@ -15,10 +15,10 @@ const Contact = () => {
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-12">
+        <div className="mx-auto max-w-2xl">
           {/* Contact Information */}
           <div className="space-y-8">
-            <h3 className="text-2xl font-bold text-white mb-8">Contact Information</h3>
+            <h3 className="text-center text-2xl font-bold text-white mb-8">Contact Information</h3>
             
             {/* Helpline - Featured */}
             <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-2xl p-6">
@@ -56,94 +56,10 @@ const Contact = () => {
                 </div>
               </div>
 
-            
+              
 
              
             </div>
-          </div>
-
-          {/* Contact Form */}
-          <div className="bg-white rounded-2xl p-8 shadow-2xl">
-            <h3 className="text-2xl font-bold text-gray-900 mb-8">Send us a Message</h3>
-            
-            <form className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    First Name
-                  </label>
-                  <input 
-                    type="text" 
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all duration-200"
-                    placeholder="Your first name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Last Name
-                  </label>
-                  <input 
-                    type="text" 
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all duration-200"
-                    placeholder="Your last name"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <input 
-                  type="email" 
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all duration-200"
-                  placeholder="your.email@example.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number
-                </label>
-                <input 
-                  type="tel" 
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all duration-200"
-                  placeholder=""
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Subject
-                </label>
-                <select className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all duration-200">
-                  <option>General Inquiry</option>
-                  <option>Technical Support</option>
-                  <option>Account Issues</option>
-                  <option>Profile Verification</option>
-                  <option>Billing Questions</option>
-                  <option>Report Inappropriate Behavior</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Message
-                </label>
-                <textarea 
-                  rows={5}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all duration-200 resize-none"
-                  placeholder="Please describe how we can help you..."
-                ></textarea>
-              </div>
-
-              <button 
-                type="submit"
-                className="w-full bg-gradient-to-r from-rose-600 to-pink-600 text-white py-4 rounded-xl font-semibold text-lg hover:from-rose-700 hover:to-pink-700 transition-all duration-300 transform hover:scale-[1.02] shadow-xl hover:shadow-2xl"
-              >
-                Send Message
-              </button>
-            </form>
           </div>
         </div>
 

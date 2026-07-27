@@ -3,8 +3,43 @@ import { Navigate, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { API_BASE_URL } from "../services/api";
 
+const PASSWORD_REQUIREMENTS = [
+  { label: "7 to 128 characters", test: (value: string) => value.length >= 7 && value.length <= 128 },
+  { label: "One uppercase letter", test: (value: string) => /[A-Z]/.test(value) },
+  { label: "One lowercase letter", test: (value: string) => /[a-z]/.test(value) },
+  { label: "One number", test: (value: string) => /\d/.test(value) },
+  { label: "One special character", test: (value: string) => /[^A-Za-z0-9]/.test(value) },
+];
+const MIN_NID_LENGTH = 8;
+
+const getPasswordIssues = (password: string) => {
+  return PASSWORD_REQUIREMENTS.filter((requirement) => !requirement.test(password));
+};
+
+const getErrorMessage = async (response: Response) => {
+  const fallback = "Failed to sign up";
+
+  try {
+    const errorData = await response.json();
+    if (typeof errorData.detail === "string") {
+      return errorData.detail;
+    }
+    if (Array.isArray(errorData.detail)) {
+      return errorData.detail
+        .map((item) => item?.msg || item?.message)
+        .filter(Boolean)
+        .join(" ");
+    }
+  } catch {
+    return fallback;
+  }
+
+  return fallback;
+};
+
 const SignUp: React.FC = () => {
-  const ONBOARDING_PENDING_KEY = "verificationOnboardingPending";
+  const PENDING_SIGNUP_USER_ID_KEY = "pendingSignupUserId";
+  const PENDING_SIGNUP_EMAIL_KEY = "pendingSignupEmail";
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -19,12 +54,14 @@ const SignUp: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
-  const { login, isLoggedIn, isAuthReady } = useAuth();
+  const { isLoggedIn, isAuthReady } = useAuth();
+  const passwordIssues = getPasswordIssues(formData.password);
+  const isPasswordTouched = formData.password.length > 0;
+  const isPasswordValid = isPasswordTouched && passwordIssues.length === 0;
 
   useEffect(() => {
     if (isAuthReady && isLoggedIn) {
-      const onboardingPending = localStorage.getItem(ONBOARDING_PENDING_KEY) === "true";
-      navigate(onboardingPending ? "/nid-verification" : "/", { replace: true });
+      navigate("/", { replace: true });
     }
   }, [isAuthReady, isLoggedIn, navigate]);
 
@@ -43,6 +80,18 @@ const SignUp: React.FC = () => {
     setLoading(true);
     setError("");
     // Client-side validations
+    if (!formData.name.trim() || !formData.email.trim() || !formData.password || !formData.gender || !formData.nid.trim() || !formData.age || !ageRange.from || !ageRange.to) {
+      setError("Please fill in all required fields before signing up.");
+      setLoading(false);
+      return;
+    }
+
+    if (formData.nid.trim().length < MIN_NID_LENGTH) {
+      setError(`NID number must be at least ${MIN_NID_LENGTH} characters.`);
+      setLoading(false);
+      return;
+    }
+
     const ageNum = parseInt(formData.age || "0");
     if (isNaN(ageNum) || ageNum < 18) {
       setError("You must be at least 18 years old to sign up.");
@@ -50,22 +99,28 @@ const SignUp: React.FC = () => {
       return;
     }
 
+    if (passwordIssues.length > 0) {
+      setError(`Password must include: ${passwordIssues.map((issue) => issue.label.toLowerCase()).join(", ")}.`);
+      setLoading(false);
+      return;
+    }
+
     const fromNum = ageRange.from ? parseInt(ageRange.from) : null;
     const toNum = ageRange.to ? parseInt(ageRange.to) : null;
 
-    if (fromNum !== null && fromNum < 18) {
+    if (fromNum === null || fromNum < 18) {
       setError("Preferred age range 'From' must be at least 18.");
       setLoading(false);
       return;
     }
-    if (toNum !== null && toNum < 18) {
+    if (toNum === null || toNum < 18) {
       setError("Preferred age range 'To' must be at least 18.");
       setLoading(false);
       return;
     }
 
     // Ensure preferred range has lower value in 'from' and higher in 'to'
-    if (fromNum !== null && toNum !== null && fromNum > toNum) {
+    if (fromNum > toNum) {
       setError("Preferred age range 'From' must be less than or equal to 'To'.");
       setLoading(false);
       return;
@@ -96,19 +151,15 @@ const SignUp: React.FC = () => {
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to sign up");
+        throw new Error(await getErrorMessage(response));
       }
       
       // Get the access token from the response
       const data = await response.json();
       
-      // Log the user in with the real token
-      localStorage.setItem(ONBOARDING_PENDING_KEY, "true");
-      login(data.access_token);
-      
-      // Navigate directly to NID verification page
-      navigate("/nid-verification", { replace: true });
+      sessionStorage.setItem(PENDING_SIGNUP_USER_ID_KEY, data.user_id);
+      sessionStorage.setItem(PENDING_SIGNUP_EMAIL_KEY, data.email || formData.email.trim());
+      navigate("/verify-email", { replace: true });
     } catch (err) {
       console.error("Signup error:", err);
       setError(err instanceof Error ? err.message : "An error occurred during signup");
@@ -175,6 +226,7 @@ const SignUp: React.FC = () => {
                 placeholder="Enter your full name"
                 value={formData.name}
                 onChange={handleInputChange}
+                minLength={1}
                 required
               />
             </div>
@@ -205,11 +257,36 @@ const SignUp: React.FC = () => {
                     placeholder="Create a strong password"
                     value={formData.password}
                     onChange={handleInputChange}
+                    minLength={7}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    aria-describedby="password-requirements"
                     required
                   />
                   <button type="button" onClick={() => setShowPassword((prev) => !prev)} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#8b7178] hover:text-[#b95777]">
                     {showPassword ? "Hide" : "Show"}
                   </button>
+                </div>
+                <div id="password-requirements" className="mt-2 rounded-xl border border-[#eadbd5] bg-white/45 px-3 py-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-[#5f514d]">Password must include</p>
+                  <div className="mt-1.5 grid gap-1 text-[11px] text-[#705f5b] sm:grid-cols-2">
+                    {PASSWORD_REQUIREMENTS.map((requirement) => {
+                      const passed = requirement.test(formData.password);
+                      return (
+                        <span
+                          key={requirement.label}
+                          className={`inline-flex items-center gap-1.5 ${passed ? "font-semibold text-emerald-700" : "text-[#8b7178]"}`}
+                        >
+                          <span className={`inline-grid h-3.5 w-3.5 place-items-center rounded-full text-[9px] leading-none ${
+                            passed ? "bg-emerald-100 text-emerald-700" : "bg-[#f4ebe7] text-transparent"
+                          }`}>
+                            ✓
+                          </span>
+                          {requirement.label}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -253,6 +330,7 @@ const SignUp: React.FC = () => {
                   placeholder="Enter your NID number"
                   value={formData.nid}
                   onChange={handleInputChange}
+                  minLength={MIN_NID_LENGTH}
                   required
                 />
               </div>
@@ -283,6 +361,7 @@ const SignUp: React.FC = () => {
                   min={18}
                   max={99}
                   onChange={handleAgeRangeChange}
+                  required
                 />
                 <input
                   type="number"
@@ -293,6 +372,7 @@ const SignUp: React.FC = () => {
                   min={18}
                   max={99}
                   onChange={handleAgeRangeChange}
+                  required
                 />
               </div>
             </div>
@@ -307,7 +387,7 @@ const SignUp: React.FC = () => {
               </div>
             )}
 
-            <button type="submit" disabled={loading} className="auth-submit w-full rounded-2xl bg-gradient-to-r from-[#b95777] to-[#7b3d54] px-5 py-4 font-bold text-white disabled:cursor-not-allowed disabled:opacity-70">
+            <button type="submit" disabled={loading || !isPasswordValid} className="auth-submit w-full rounded-2xl bg-gradient-to-r from-[#b95777] to-[#7b3d54] px-5 py-4 font-bold text-white disabled:cursor-not-allowed disabled:opacity-70">
               <span className="relative z-[1]">{loading ? "Creating Account..." : "Create Account"}</span>
             </button>
           </form>

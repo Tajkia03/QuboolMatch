@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { messageApi, notificationApi } from '../services/api';
+import { API_BASE_URL, getAccessToken, messageApi, notificationApi } from '../services/api';
+import { getProfileCompletion } from '../utils/profileCompletion';
 
 const Navbar: React.FC = () => {
   const { isLoggedIn, logout } = useAuth();
@@ -10,6 +11,7 @@ const Navbar: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [profileCompletionPercent, setProfileCompletionPercent] = useState<number | null>(null);
 
   const refreshBadges = async () => {
     const token = localStorage.getItem('accessToken');
@@ -54,6 +56,35 @@ const Navbar: React.FC = () => {
     }
   };
 
+  const refreshProfileCompletion = async () => {
+    const token = getAccessToken();
+
+    if (!isLoggedIn || !token) {
+      setProfileCompletionPercent(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/profile`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        setProfileCompletionPercent(null);
+        return;
+      }
+
+      const data = await response.json();
+      setProfileCompletionPercent(getProfileCompletion(data).overallPercent);
+    } catch (error) {
+      console.error('Failed to refresh profile completion:', error);
+      setProfileCompletionPercent(null);
+    }
+  };
+
   useEffect(() => {
     void refreshBadges();
     if (!isLoggedIn) {
@@ -66,6 +97,24 @@ const Navbar: React.FC = () => {
 
     return () => {
       window.clearInterval(intervalId);
+    };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    void refreshProfileCompletion();
+
+    if (!isLoggedIn) {
+      return;
+    }
+
+    const handleProfileCompletionRefresh = () => {
+      void refreshProfileCompletion();
+    };
+
+    window.addEventListener('profile-completion-refresh', handleProfileCompletionRefresh);
+
+    return () => {
+      window.removeEventListener('profile-completion-refresh', handleProfileCompletionRefresh);
     };
   }, [isLoggedIn]);
 
@@ -85,8 +134,20 @@ const Navbar: React.FC = () => {
 
   const handleLogout = () => {
     logout();
+    setProfileCompletionPercent(null);
     navigate('/');
   };
+
+  const profileCompletionTitle =
+    profileCompletionPercent === null
+      ? 'Profile completion unavailable'
+      : `Profile completion: ${profileCompletionPercent}%`;
+  const profileCompletionClass =
+    profileCompletionPercent === null
+      ? 'text-gray-700 hover:bg-gray-100'
+      : profileCompletionPercent === 100
+        ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+        : 'border border-red-200 bg-red-50 text-red-700 hover:bg-red-100';
 
   return (
     <nav className="sticky top-0 z-50 border-b border-[#eadbd5] bg-[#fffaf6]/95 shadow-soft backdrop-blur-md">
@@ -105,11 +166,6 @@ const Navbar: React.FC = () => {
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-1">
             <NavLink to="/#home">Home</NavLink>
-            <NavLink to="/#about">About</NavLink>
-            <NavLink to="/#why-choose-us">Why Us</NavLink>
-            <NavLink to="/#services">Services</NavLink>
-            <NavLink to="/#testimonials">Testimonials</NavLink>
-            <NavLink to="/#contact">Contact</NavLink>
             
             {isLoggedIn && (
               <>
@@ -127,7 +183,8 @@ const Navbar: React.FC = () => {
               <>
                 <Link
                   to="/profile"
-                  className="px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors duration-200 font-medium"
+                  title={profileCompletionTitle}
+                  className={`px-4 py-2 rounded-lg transition-colors duration-200 font-medium ${profileCompletionClass}`}
                 >
                   Profile
                 </Link>
@@ -181,11 +238,6 @@ const Navbar: React.FC = () => {
           <div className="lg:hidden py-4 border-t border-gray-100 animate-slide-down">
             <div className="flex flex-col space-y-2">
               <MobileNavLink to="/#home" onClick={() => setIsMobileMenuOpen(false)}>Home</MobileNavLink>
-              <MobileNavLink to="/#about" onClick={() => setIsMobileMenuOpen(false)}>About</MobileNavLink>
-              <MobileNavLink to="/#why-choose-us" onClick={() => setIsMobileMenuOpen(false)}>Why Us</MobileNavLink>
-              <MobileNavLink to="/#services" onClick={() => setIsMobileMenuOpen(false)}>Services</MobileNavLink>
-              <MobileNavLink to="/#testimonials" onClick={() => setIsMobileMenuOpen(false)}>Testimonials</MobileNavLink>
-              <MobileNavLink to="/#contact" onClick={() => setIsMobileMenuOpen(false)}>Contact</MobileNavLink>
               
               {isLoggedIn && (
                 <>
@@ -193,7 +245,14 @@ const Navbar: React.FC = () => {
                   <MobileNavLink to="/messages" badgeCount={messageUnreadCount} onClick={() => setIsMobileMenuOpen(false)}>Messages</MobileNavLink>
                   <MobileNavLink to="/notifications" badgeCount={notificationUnreadCount} onClick={() => setIsMobileMenuOpen(false)}>Notifications</MobileNavLink>
                   <MobileNavLink to="/nid-verification" onClick={() => setIsMobileMenuOpen(false)}>Verification</MobileNavLink>
-                  <MobileNavLink to="/profile" onClick={() => setIsMobileMenuOpen(false)}>Profile</MobileNavLink>
+                  <MobileNavLink
+                    to="/profile"
+                    title={profileCompletionTitle}
+                    className={profileCompletionClass}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Profile
+                  </MobileNavLink>
                 </>
               )}
               
@@ -252,11 +311,19 @@ const NavLink: React.FC<{ to: string; children: React.ReactNode; badgeCount?: nu
 );
 
 // Mobile Nav Link Component
-const MobileNavLink: React.FC<{ to: string; children: React.ReactNode; onClick: () => void; badgeCount?: number }> = ({ to, children, onClick, badgeCount = 0 }) => (
+const MobileNavLink: React.FC<{
+  to: string;
+  children: React.ReactNode;
+  onClick: () => void;
+  badgeCount?: number;
+  title?: string;
+  className?: string;
+}> = ({ to, children, onClick, badgeCount = 0, title, className = "text-[#625651] hover:bg-[#f6e5ea] hover:text-[#8d3857]" }) => (
   <Link
     to={to}
     onClick={onClick}
-    className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 font-medium text-[#625651] transition-all duration-200 hover:bg-[#f6e5ea] hover:text-[#8d3857]"
+    title={title}
+    className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 font-medium transition-all duration-200 ${className}`}
   >
     <span>{children}</span>
     {badgeCount > 0 && (

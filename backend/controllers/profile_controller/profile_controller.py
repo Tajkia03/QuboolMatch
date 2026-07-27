@@ -17,6 +17,16 @@ from datetime import date, datetime
 router = APIRouter()
 
 
+def is_public_matchable_user(user: Optional[User]) -> bool:
+    """Return True when a user can appear in matchmaking surfaces."""
+    return bool(
+        user
+        and not user.is_admin
+        and not user.is_deleted
+        and not user.is_archived
+    )
+
+
 def get_current_user_id(authorization: str = Header(None), db: Session = Depends(get_db)) -> str:
     """Extract and verify user ID from Authorization header"""
     print(f"DEBUG: Authorization header: {authorization}")
@@ -136,6 +146,7 @@ class ProfileCreate(BaseModel):
     religion: Optional[str] = None
 
     # Personal Information
+    address: Optional[str] = None
     location: Optional[str] = None
     father_name: Optional[str] = None
     mother_name: Optional[str] = None
@@ -238,6 +249,8 @@ async def create_profile(
 
         if user.identity_verified:
             profile_dict["identity_verified"] = True
+            profile_dict.pop("address", None)
+            profile_dict.pop("blood_group", None)
             if user.father_name is not None:
                 profile_dict["father_name"] = user.father_name
             if user.mother_name is not None:
@@ -352,12 +365,18 @@ async def update_profile(
 
         if user.identity_verified:
             profile_dict["identity_verified"] = True
+            profile_dict.pop("address", None)
+            profile_dict.pop("blood_group", None)
             if user.father_name is not None:
                 profile_dict["father_name"] = user.father_name
             if user.mother_name is not None:
                 profile_dict["mother_name"] = user.mother_name
             if user.date_of_birth is not None:
                 profile_dict["date_of_birth"] = user.date_of_birth
+            if profile.address is not None:
+                profile_dict["address"] = profile.address
+            if profile.blood_group is not None:
+                profile_dict["blood_group"] = profile.blood_group
         
         # Process base64 files
         if 'profile_picture' in profile_dict and profile_dict['profile_picture']:
@@ -574,7 +593,9 @@ async def browse_users(
         blocked_ids = BlockRepository.get_blocked_user_ids(db, current_user_id)
         total_query = db.query(User).filter(
             User.id != current_user_id,
-            User.is_deleted == False
+            User.is_deleted == False,
+            User.is_archived == False,
+            User.is_admin == False
         )
         if blocked_ids:
             total_query = total_query.filter(User.id.notin_(blocked_ids))
@@ -585,7 +606,9 @@ async def browse_users(
         # Get paginated users
         users_query = db.query(User).filter(
             User.id != current_user_id,
-            User.is_deleted == False
+            User.is_deleted == False,
+            User.is_archived == False,
+            User.is_admin == False
         )
         if blocked_ids:
             users_query = users_query.filter(User.id.notin_(blocked_ids))
@@ -716,6 +739,7 @@ async def get_recommendations(
         # Get ML-ranked user_id list (or None if user not in model index) - fetch more for pagination
         ranked_matches = ml_recommend(current_user_id, db, top_n=100) if ml_ready else None
         reasons_by_id = {item["user_id"]: item["reason_tags"] for item in (ranked_matches or [])}
+        explanations_by_id = {item["user_id"]: item.get("match_explanation") for item in (ranked_matches or [])}
         ranked_ids = [item["user_id"] for item in ranked_matches] if ranked_matches else None
         print(f"[RECOMMENDATIONS] ML ready: {ml_ready}, Ranked IDs count: {len(ranked_ids) if ranked_ids else 0}")
 
@@ -727,7 +751,9 @@ async def get_recommendations(
                 print("[RECOMMENDATIONS] ML not ready, falling back to all users")
             users_query = db.query(User).filter(
                 User.id != current_user_id,
-                User.is_deleted == False
+                User.is_deleted == False,
+                User.is_archived == False,
+                User.is_admin == False
             )
             if blocked_ids:
                 users_query = users_query.filter(User.id.notin_(blocked_ids))
@@ -748,7 +774,7 @@ async def get_recommendations(
         print(f"[RECOMMENDATIONS] Processing {len(paginated_ids)} user IDs from page {page}...")
         for uid in paginated_ids:
             user = db.query(User).filter(User.id == uid).first()
-            if not user or user.is_deleted:
+            if not is_public_matchable_user(user):
                 continue
 
             profile = ProfileRepository.get_by_user_id(db, uid)
@@ -814,7 +840,8 @@ async def get_recommendations(
                 "preferred_age_max": profile.preferred_age_max if profile else None,
                 "living_with_in_laws": profile.living_with_in_laws if profile else None,
                 "willing_to_relocate": profile.willing_to_relocate if profile else None,
-                "recommendation_reasons": reasons_by_id.get(user.id, [])
+                "recommendation_reasons": reasons_by_id.get(user.id, []),
+                "match_explanation": explanations_by_id.get(user.id)
             })
 
         has_more = (offset + len(result)) < total_count
@@ -856,6 +883,13 @@ async def get_full_profile(
         
         # Import here to avoid circular import
         from repositories.interest_repository.interest_repository import InterestRepository
+
+        # Get user and reject system/admin or inactive targets before relationship checks
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not is_public_matchable_user(user):
+            raise HTTPException(status_code=403, detail="This account is not available for matchmaking.")
         
         if BlockRepository.is_blocked_between(db, current_user_id, user_id):
             raise HTTPException(status_code=403, detail="You cannot view this profile")
@@ -869,11 +903,7 @@ async def get_full_profile(
                 detail="You can only view full profiles of users with mutual interest"
             )
         
-        # Get user and profile
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
+        # Get profile
         profile = ProfileRepository.get_by_user_id(db, user_id)
         if not profile:
             raise HTTPException(status_code=404, detail="Profile not found")

@@ -176,6 +176,8 @@ def get_recommendations(current_user_id: str, db: Session, top_n: int = 20) -> O
                     JOIN profiles p ON u.id = p.user_id
                     WHERE LOWER(u.gender) = LOWER(:gender)
                     AND u.is_deleted = FALSE
+                    AND u.is_archived = FALSE
+                    AND u.is_admin = FALSE
                     AND p.is_completed = TRUE
                 """),
                 {"gender": opposite_gender}
@@ -269,6 +271,9 @@ def _fetch_user_row(user_id: str, db: Session) -> Optional[dict]:
             FROM users u
             LEFT JOIN profiles p ON u.id = p.user_id
             WHERE u.id = :uid
+            AND u.is_deleted = FALSE
+            AND u.is_archived = FALSE
+            AND u.is_admin = FALSE
         """),
         {"uid": user_id}
     ).fetchone()

@@ -66,6 +66,36 @@ def test_ranking_is_deterministic_and_strict_first(tmp_path: Path):
     assert first["match_count"] <= 100
 
 
+def test_recommendations_include_match_explanation(tmp_path: Path):
+    profiles = load_profiles(DEFAULT_CSV)
+    user_id = profiles.iloc[0]["user_id"]
+    train(DEFAULT_CSV, tmp_path)
+
+    result = recommend(user_id, 5, tmp_path)
+    explanation = result["matches"][0]["match_explanation"]
+
+    assert set(explanation) >= {
+        "overall_score",
+        "similarity_score",
+        "preference_score",
+        "strict_compatible",
+        "reason_tags",
+        "rows",
+    }
+    assert explanation["reason_tags"] == result["matches"][0]["reason_tags"]
+    assert explanation["strict_compatible"] == result["matches"][0]["strict_compatible"]
+    assert 0 <= explanation["overall_score"] <= 1
+    assert 0 <= explanation["similarity_score"] <= 1
+    assert 0 <= explanation["preference_score"] <= 1
+    assert {row["key"] for row in explanation["rows"]} == {
+        "age", "height", "weight", "religion", "education", "profession", "location", "lifestyle",
+    }
+    assert all(
+        set(row) >= {"label", "matched", "required", "user_preference", "candidate_value", "note"}
+        for row in explanation["rows"]
+    )
+
+
 def test_religion_filter_preference_fallback_and_no_preference():
     profiles = load_profiles(DEFAULT_CSV)
     query = profiles.iloc[0].copy()

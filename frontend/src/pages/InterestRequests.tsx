@@ -55,6 +55,38 @@ interface FullProfileResponse {
   };
 }
 
+type InterestActionStatus = 'accepted' | 'rejected';
+
+const HANDLED_INTEREST_NOTIFICATION_KEY = 'handledInterestNotifications';
+
+const readHandledInterestNotificationMap = (): Record<string, InterestActionStatus> => {
+  try {
+    const raw = sessionStorage.getItem(HANDLED_INTEREST_NOTIFICATION_KEY);
+    if (!raw) {
+      return {};
+    }
+    return JSON.parse(raw) as Record<string, InterestActionStatus>;
+  } catch {
+    return {};
+  }
+};
+
+const writeHandledInterestNotificationMap = (map: Record<string, InterestActionStatus>) => {
+  try {
+    sessionStorage.setItem(HANDLED_INTEREST_NOTIFICATION_KEY, JSON.stringify(map));
+  } catch {
+    // Ignore storage errors.
+  }
+};
+
+const rememberHandledInterest = (interestId: string, status: InterestActionStatus) => {
+  const existingMap = readHandledInterestNotificationMap();
+  writeHandledInterestNotificationMap({
+    ...existingMap,
+    [interestId]: status,
+  });
+};
+
 const InterestRequests: React.FC = () => {
   const navigate = useNavigate();
   const [receivedInterests, setReceivedInterests] = useState<Interest[]>([]);
@@ -95,6 +127,7 @@ const InterestRequests: React.FC = () => {
     try {
       setProcessingId(interestId);
       await interestApi.acceptInterest(interestId);
+      rememberHandledInterest(interestId, 'accepted');
       const profileResponse = await interestApi.getFullProfile(userId);
       setFullProfile(profileResponse as FullProfileResponse);
       await loadInterests();
@@ -112,6 +145,7 @@ const InterestRequests: React.FC = () => {
     try {
       setProcessingId(interestId);
       await interestApi.rejectInterest(interestId);
+      rememberHandledInterest(interestId, 'rejected');
       await loadInterests();
       alert(`Interest from ${userName} rejected`);
     } catch (err: any) {

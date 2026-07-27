@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 from main import app
 from database import get_db
 from models.user.user import User
-from services.gemini_nid_ocr_service import NIDOcrExtractionError, NIDOcrExtractionResult
+from services.gemini_nid_ocr_service import NIDBackOcrExtractionResult, NIDOcrExtractionError, NIDOcrExtractionResult
 from shared.token import get_current_admin_user, get_current_user
 
 client = TestClient(app)
@@ -40,7 +40,10 @@ class TestVerificationController:
                         data={
                             "verification_notes": "Ready for verification"
                         },
-                        files={"nid_image": ("test.jpg", b"fake image data", "image/jpeg")}
+                        files={
+                            "nid_image": ("test.jpg", b"fake image data", "image/jpeg"),
+                            "nid_back_image": ("test-back.jpg", b"fake back image data", "image/jpeg"),
+                        }
                     )
                     
                     assert response.status_code == 200
@@ -71,12 +74,15 @@ class TestVerificationController:
                     "/verification/submit",
                     data={
                     },
-                    files={"nid_image": ("test.txt", b"fake text data", "text/plain")}
+                    files={
+                        "nid_image": ("test.txt", b"fake text data", "text/plain"),
+                        "nid_back_image": ("test-back.jpg", b"fake back image data", "image/jpeg"),
+                    }
                 )
                 
                 assert response.status_code == 400
                 data = response.json()
-                assert "only image files are allowed" in data["detail"].lower()
+                assert "only jpeg, png, and webp images are allowed" in data["detail"].lower()
             finally:
                 app.dependency_overrides.pop(get_current_user, None)
                 app.dependency_overrides.pop(get_db, None)
@@ -102,6 +108,10 @@ class TestVerificationController:
             mock_user.ocr_processed_at = None
             mock_user.nid_image_data = None
             mock_user.nid_image_filename = None
+            mock_user.nid_back_image_data = None
+            mock_user.nid_back_image_filename = None
+            mock_user.ocr_address = None
+            mock_user.ocr_blood_group = None
             mock_get_user.return_value = mock_user
             
             mock_db = Mock()
@@ -145,12 +155,16 @@ class TestVerificationController:
             user.guardian_verification_status = "not_submitted"
             user.nid_image_data = b"image-bytes"
             user.nid_image_filename = "nid.png"
+            user.nid_back_image_data = b"back-image-bytes"
+            user.nid_back_image_filename = "nid-back.png"
             user.created_at = datetime(2026, 6, 24, 10, 30, 0)
             user.ocr_name = "Test User"
             user.ocr_father_name = "Father Name"
             user.ocr_mother_name = "Mother Name"
             user.ocr_date_of_birth = None
             user.ocr_nid_number = "1234567890123"
+            user.ocr_address = "Dhaka, Bangladesh"
+            user.ocr_blood_group = "B+"
             user.ocr_image_quality = "good"
             user.ocr_warnings = '["minor glare"]'
             user.ocr_confirmed = True
@@ -184,6 +198,8 @@ class TestVerificationController:
                 assert pending_user["ocr_name_match_status"] == "matched"
                 assert pending_user["ocr_nid_match"] is True
                 assert pending_user["ocr_nid_masked"] == "*********0123"
+                assert pending_user["ocr_address"] == "Dhaka, Bangladesh"
+                assert pending_user["ocr_blood_group"] == "B+"
                 assert pending_user["ocr_review_status"] == "pending_review"
                 assert pending_user["ocr_warnings"] == ["minor glare"]
             finally:
@@ -210,12 +226,16 @@ class TestVerificationController:
             user.guardian_verification_status = "not_submitted"
             user.nid_image_data = b"image-bytes"
             user.nid_image_filename = "nid.png"
+            user.nid_back_image_data = b"back-image-bytes"
+            user.nid_back_image_filename = "nid-back.png"
             user.created_at = datetime(2026, 6, 24, 10, 30, 0)
             user.ocr_name = "Test User"
             user.ocr_father_name = "Father Name"
             user.ocr_mother_name = "Mother Name"
             user.ocr_date_of_birth = None
             user.ocr_nid_number = "123 4567 890123"
+            user.ocr_address = None
+            user.ocr_blood_group = None
             user.ocr_image_quality = "good"
             user.ocr_warnings = []
             user.ocr_confirmed = True
@@ -403,7 +423,10 @@ class TestVerificationController:
                     response = client.post(
                         "/verification/submit",
                         data={},
-                        files={"nid_image": ("test.jpg", b"fake image data", "image/jpeg")}
+                        files={
+                            "nid_image": ("test.jpg", b"fake image data", "image/jpeg"),
+                            "nid_back_image": ("test-back.jpg", b"fake back image data", "image/jpeg"),
+                        }
                     )
                     
                     assert response.status_code == 200
@@ -417,7 +440,8 @@ class TestVerificationController:
         """Test OCR extraction saves extracted fields to the user"""
         with patch('controllers.verification_controller.verification_controller.get_current_user') as mock_get_user, \
              patch('controllers.verification_controller.verification_controller.get_db') as mock_get_db, \
-             patch('controllers.verification_controller.verification_controller.ocr_service.extract') as mock_extract:
+             patch('controllers.verification_controller.verification_controller.ocr_service.extract') as mock_extract, \
+             patch('controllers.verification_controller.verification_controller.ocr_service.extract_back') as mock_extract_back:
 
             user = User("Test User", "test@example.com", "password123", "Male", "1234567890", 25)
             user.id = "test-user-id"
@@ -442,10 +466,20 @@ class TestVerificationController:
                     image_quality="good",
                     warnings=["slight blur"],
                 )
+                mock_extract_back.return_value = NIDBackOcrExtractionResult(
+                    document_detected=True,
+                    address="Dhaka, Bangladesh",
+                    blood_group="B+",
+                    image_quality="good",
+                    warnings=[],
+                )
 
                 response = client.post(
                     "/verification/extract-nid",
-                    files={"nid_image": ("nid.png", b"fake image data", "image/png")},
+                    files={
+                        "nid_image": ("nid.png", b"fake image data", "image/png"),
+                        "nid_back_image": ("nid-back.png", b"fake back image data", "image/png"),
+                    },
                 )
 
                 assert response.status_code == 200
@@ -458,8 +492,12 @@ class TestVerificationController:
                 assert data["date_of_birth"] == "1998-04-12"
                 assert data["nid_number"] == "1234567890123"
                 assert data["image_quality"] == "good"
+                assert data["address"] == "Dhaka, Bangladesh"
+                assert data["blood_group"] == "B+"
                 assert data["warnings"] == ["slight blur"]
                 assert user.ocr_name == "Ayesha Rahman"
+                assert user.ocr_address == "Dhaka, Bangladesh"
+                assert user.ocr_blood_group == "B+"
                 assert user.ocr_confirmed is False
                 assert user.ocr_processed_at is not None
                 mock_db.commit.assert_called_once()
@@ -486,7 +524,10 @@ class TestVerificationController:
             try:
                 response = client.post(
                     "/verification/extract-nid",
-                    files={"nid_image": ("nid.gif", b"fake image data", "image/gif")},
+                    files={
+                        "nid_image": ("nid.gif", b"fake image data", "image/gif"),
+                        "nid_back_image": ("nid-back.png", b"fake back image data", "image/png"),
+                    },
                 )
 
                 assert response.status_code == 400
@@ -517,7 +558,10 @@ class TestVerificationController:
 
                 response = client.post(
                     "/verification/extract-nid",
-                    files={"nid_image": ("nid.png", b"fake image data", "image/png")},
+                    files={
+                        "nid_image": ("nid.png", b"fake image data", "image/png"),
+                        "nid_back_image": ("nid-back.png", b"fake back image data", "image/png"),
+                    },
                 )
 
                 assert response.status_code == 200

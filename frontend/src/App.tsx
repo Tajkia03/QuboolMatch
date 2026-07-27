@@ -8,6 +8,7 @@ import Testimonials from "./components/Testimonials";
 import Contact from "./components/Contact";
 import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
+import VerifyEmail from "./pages/VerifyEmail";
 import NIDVerification from "./pages/NIDVerification";
 import ProfilePage from "./pages/ProfilePage";
 import FindMatches from "./pages/FindMatches";
@@ -46,6 +47,7 @@ function App(): JSX.Element {
             <Route path="/contact" element={<Layout><Contact /></Layout>} />
             <Route path="/signin" element={<Layout><SignIn /></Layout>} />
             <Route path="/signup" element={<Layout><SignUp /></Layout>} />
+            <Route path="/verify-email" element={<Layout><VerifyEmail /></Layout>} />
             
             <Route path="/nid-verification" element={
               <ProtectedRoute>

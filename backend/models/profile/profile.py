@@ -12,6 +12,7 @@ class Profile(Base):
     user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
     
     # Personal Information
+    address = Column(Text, nullable=True)
     location = Column(String, nullable=True)
     date_of_birth = Column(Date, nullable=True)
     father_name = Column(String, nullable=True)
@@ -142,6 +143,7 @@ class Profile(Base):
         return {
             'id': self.id,
             'user_id': self.user_id,
+            'address': self.address,
             'location': self.location,
             'date_of_birth': self.date_of_birth.isoformat() if self.date_of_birth else None,
             'father_name': self.father_name,

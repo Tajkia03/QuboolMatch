@@ -47,7 +47,7 @@ const writeHandledInterestNotificationMap = (map: Record<string, InterestActionS
 const applyHandledInterestStatus = (items: Notification[]): Notification[] => {
   const handledMap = readHandledInterestNotificationMap();
   return items.map((item) => {
-    const handledStatus = handledMap[item.id];
+    const handledStatus = handledMap[item.id] || (item.related_id ? handledMap[item.related_id] : undefined);
     if (item.type !== 'interest_received' || !handledStatus) {
       return item;
     }
@@ -173,6 +173,7 @@ const Notifications: React.FC = () => {
       writeHandledInterestNotificationMap({
         ...existingMap,
         [notification.id]: handledStatus,
+        ...(notification.related_id ? { [notification.related_id]: handledStatus } : {}),
       });
 
       setNotifications((prevNotifications) =>

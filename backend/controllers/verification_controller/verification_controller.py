@@ -48,6 +48,7 @@ class VerificationStatusResponse(BaseModel):
     ocr_date_of_birth: Optional[str] = None
     ocr_nid_number: Optional[str] = None
     ocr_nid_masked: Optional[str] = None
+    ocr_address: Optional[str] = None
     ocr_blood_group: Optional[str] = None
     ocr_image_quality: Optional[str] = None
     ocr_warnings: list[str] = Field(default_factory=list)
@@ -61,6 +62,8 @@ class VerificationStatusResponse(BaseModel):
     admin_review_notes: Optional[str] = None
     has_nid_image: bool = False
     nid_image_filename: Optional[str] = None
+    has_nid_back_image: bool = False
+    nid_back_image_filename: Optional[str] = None
 
 
 class PendingVerificationUserResponse(BaseModel):
@@ -78,6 +81,8 @@ class PendingVerificationUserResponse(BaseModel):
     guardian_verification_status: str
     has_nid_image: bool = False
     nid_image_filename: Optional[str] = None
+    has_nid_back_image: bool = False
+    nid_back_image_filename: Optional[str] = None
     created_at: str
     ocr_name: Optional[str] = None
     ocr_father_name: Optional[str] = None
@@ -85,6 +90,8 @@ class PendingVerificationUserResponse(BaseModel):
     ocr_date_of_birth: Optional[str] = None
     ocr_nid_number: Optional[str] = None
     ocr_nid_masked: Optional[str] = None
+    ocr_address: Optional[str] = None
+    ocr_blood_group: Optional[str] = None
     ocr_image_quality: Optional[str] = None
     ocr_warnings: list[str] = Field(default_factory=list)
     ocr_confirmed: bool = False
@@ -137,6 +144,8 @@ class NIDOcrExtractionResponse(BaseModel):
     mother_name: Optional[str] = None
     date_of_birth: Optional[str] = None
     nid_number: Optional[str] = None
+    address: Optional[str] = None
+    blood_group: Optional[str] = None
     image_quality: Optional[str] = None
     warnings: list[str] = Field(default_factory=list)
 
@@ -163,9 +172,31 @@ def _build_ocr_response(
         mother_name=extraction.mother_name,
         date_of_birth=extraction.date_of_birth,
         nid_number=extraction.nid_number,
+        address=getattr(extraction, "address", None),
+        blood_group=getattr(extraction, "blood_group", None),
         image_quality=extraction.image_quality,
         warnings=extraction.warnings,
     )
+
+
+async def _read_nid_upload(upload: Optional[UploadFile], label: str) -> bytes:
+    if upload is None:
+        raise HTTPException(status_code=400, detail=f"{label} is required")
+
+    if not upload.content_type or upload.content_type.lower() not in ALLOWED_NID_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only JPEG, PNG, and WebP images are allowed for {label}",
+        )
+
+    image_data = await upload.read()
+    if not image_data:
+        raise HTTPException(status_code=400, detail=f"{label} file cannot be empty")
+
+    if len(image_data) > MAX_NID_IMAGE_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail=f"{label} file size exceeds 5MB limit")
+
+    return image_data
 
 
 def _parse_ocr_date(value: Optional[str]) -> Optional[date]:
@@ -398,6 +429,8 @@ def _build_pending_user_response(user: User) -> PendingVerificationUserResponse:
         guardian_verification_status=_optional_string(getattr(user, "guardian_verification_status", None)) or "",
         has_nid_image=isinstance(getattr(user, "nid_image_data", None), (bytes, bytearray)),
         nid_image_filename=_optional_string(getattr(user, "nid_image_filename", None)),
+        has_nid_back_image=isinstance(getattr(user, "nid_back_image_data", None), (bytes, bytearray)),
+        nid_back_image_filename=_optional_string(getattr(user, "nid_back_image_filename", None)),
         created_at=_optional_isoformat(getattr(user, "created_at", None)) or "",
         ocr_name=_optional_string(getattr(user, "ocr_name", None)),
         ocr_father_name=_optional_string(getattr(user, "ocr_father_name", None)),
@@ -405,6 +438,8 @@ def _build_pending_user_response(user: User) -> PendingVerificationUserResponse:
         ocr_date_of_birth=comparison_payload["ocr_date_of_birth"],
         ocr_nid_number=_optional_string(getattr(user, "ocr_nid_number", None)),
         ocr_nid_masked=comparison_payload["ocr_nid_masked"],
+        ocr_address=_optional_string(getattr(user, "ocr_address", None)),
+        ocr_blood_group=_optional_string(getattr(user, "ocr_blood_group", None)),
         ocr_image_quality=_optional_string(getattr(user, "ocr_image_quality", None)),
         ocr_warnings=_normalize_ocr_warnings(getattr(user, "ocr_warnings", None)) or [],
         ocr_confirmed=_optional_bool(getattr(user, "ocr_confirmed", False)) or False,
@@ -438,6 +473,8 @@ def _build_status_response(user: User, rejection_notes: Optional[str]) -> Verifi
         ocr_date_of_birth=comparison_payload["ocr_date_of_birth"],
         ocr_nid_number=_optional_string(getattr(user, "ocr_nid_number", None)),
         ocr_nid_masked=comparison_payload["ocr_nid_masked"],
+        ocr_address=_optional_string(getattr(user, "ocr_address", None)),
+        ocr_blood_group=_optional_string(getattr(user, "ocr_blood_group", None)),
         ocr_image_quality=_optional_string(getattr(user, "ocr_image_quality", None)),
         ocr_warnings=_normalize_ocr_warnings(getattr(user, "ocr_warnings", None)) or [],
         ocr_confirmed=_optional_bool(getattr(user, "ocr_confirmed", False)) or False,
@@ -450,6 +487,8 @@ def _build_status_response(user: User, rejection_notes: Optional[str]) -> Verifi
         admin_review_notes=comparison_payload["admin_review_notes"],
         has_nid_image=isinstance(getattr(user, "nid_image_data", None), (bytes, bytearray)),
         nid_image_filename=_optional_string(getattr(user, "nid_image_filename", None)),
+        has_nid_back_image=isinstance(getattr(user, "nid_back_image_data", None), (bytes, bytearray)),
+        nid_back_image_filename=_optional_string(getattr(user, "nid_back_image_filename", None)),
     )
 
 
@@ -494,31 +533,26 @@ def _clear_comparison_fields(user: User) -> None:
 
 @router.post("/extract-nid", response_model=NIDOcrExtractionResponse)
 async def extract_nid_information(
-    nid_image: UploadFile = File(...),
+    nid_image: Optional[UploadFile] = File(None),
+    nid_back_image: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Extract OCR data from the front side of a Bangladesh NID using Gemini.
+    Extract OCR data from the front and back sides of a Bangladesh NID using Gemini.
     """
     try:
-        if not nid_image.content_type or nid_image.content_type.lower() not in ALLOWED_NID_IMAGE_TYPES:
-            raise HTTPException(
-                status_code=400,
-                detail="Only JPEG, PNG, and WebP images are allowed for NID OCR",
-            )
-
-        nid_image_data = await nid_image.read()
-        if not nid_image_data:
-            raise HTTPException(status_code=400, detail="NID image file cannot be empty")
-
-        if len(nid_image_data) > MAX_NID_IMAGE_SIZE_BYTES:
-            raise HTTPException(status_code=413, detail="NID image file size exceeds 5MB limit")
+        nid_image_data = await _read_nid_upload(nid_image, "NID front image")
+        nid_back_image_data = await _read_nid_upload(nid_back_image, "NID back image")
 
         try:
             extraction = ocr_service.extract(
                 image_data=nid_image_data,
                 content_type=nid_image.content_type,
+            )
+            back_extraction = ocr_service.extract_back(
+                image_data=nid_back_image_data,
+                content_type=nid_back_image.content_type,
             )
         except NIDOcrExtractionError as exc:
             logger.warning("NID OCR extraction failed: %s", exc)
@@ -534,8 +568,16 @@ async def extract_nid_information(
                 extraction=extraction,
             )
 
+        if not back_extraction.document_detected:
+            return _build_ocr_response(
+                success=False,
+                message="No back side of a Bangladesh NID was detected in the uploaded image.",
+                extraction=extraction,
+            )
+
         parsed_date_of_birth = _parse_ocr_date(extraction.date_of_birth)
         warnings = list(extraction.warnings)
+        warnings.extend(f"Back side: {warning}" for warning in back_extraction.warnings)
         if extraction.date_of_birth and not parsed_date_of_birth:
             warnings.append("Date of birth could not be parsed")
 
@@ -545,6 +587,8 @@ async def extract_nid_information(
             ocr_mother_name=extraction.mother_name,
             ocr_date_of_birth=parsed_date_of_birth,
             ocr_nid_number=extraction.nid_number,
+            ocr_address=back_extraction.address,
+            ocr_blood_group=back_extraction.blood_group,
             ocr_image_quality=extraction.image_quality,
             ocr_warnings=warnings,
             processed_at=datetime.now(timezone.utc),
@@ -578,6 +622,8 @@ async def extract_nid_information(
                 mother_name=current_user.ocr_mother_name,
                 date_of_birth=current_user.ocr_date_of_birth.isoformat() if current_user.ocr_date_of_birth else None,
                 nid_number=current_user.ocr_nid_number,
+                address=current_user.ocr_address,
+                blood_group=current_user.ocr_blood_group,
                 image_quality=current_user.ocr_image_quality,
                 warnings=current_user.ocr_warnings or [],
             ),
@@ -595,7 +641,15 @@ async def extract_nid_information(
 @router.post("/submit", response_model=VerificationResponse)
 async def submit_verification(
     verification_notes: Optional[str] = Form(None),
-    nid_image: UploadFile = File(...),
+    nid_image: Optional[UploadFile] = File(None),
+    nid_back_image: Optional[UploadFile] = File(None),
+    ocr_name: Optional[str] = Form(None),
+    ocr_father_name: Optional[str] = Form(None),
+    ocr_mother_name: Optional[str] = Form(None),
+    ocr_date_of_birth: Optional[str] = Form(None),
+    ocr_nid_number: Optional[str] = Form(None),
+    ocr_address: Optional[str] = Form(None),
+    ocr_blood_group: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -603,23 +657,56 @@ async def submit_verification(
     Submit NID verification information including NID image and optional notes
     """
     try:
-        # Validate NID image file type
-        if not nid_image.content_type.startswith('image/'):
-            raise HTTPException(status_code=400, detail="Only image files are allowed for NID image")
-        
-        # Validate file size (5MB limit)
-        MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
-        nid_image_data = await nid_image.read()
-        if len(nid_image_data) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="NID image file size exceeds 5MB limit")
+        nid_image_data = await _read_nid_upload(nid_image, "NID front image")
+        nid_back_image_data = await _read_nid_upload(nid_back_image, "NID back image")
         
         # Update user verification info with binary data
         current_user.update_verification_info(
             nid_image_data=nid_image_data,
             nid_image_filename=nid_image.filename,
             nid_image_content_type=nid_image.content_type,
+            nid_back_image_data=nid_back_image_data,
+            nid_back_image_filename=nid_back_image.filename,
+            nid_back_image_content_type=nid_back_image.content_type,
             verification_notes=verification_notes
         )
+
+        if any(
+            value is not None
+            for value in [
+                ocr_name,
+                ocr_father_name,
+                ocr_mother_name,
+                ocr_date_of_birth,
+                ocr_nid_number,
+                ocr_address,
+                ocr_blood_group,
+            ]
+        ):
+            parsed_date_of_birth = _parse_ocr_date(ocr_date_of_birth)
+            if ocr_date_of_birth and not parsed_date_of_birth:
+                raise HTTPException(status_code=400, detail="Extracted date of birth must use YYYY-MM-DD format")
+
+            current_user.update_ocr_extraction(
+                ocr_name=ocr_name,
+                ocr_father_name=ocr_father_name,
+                ocr_mother_name=ocr_mother_name,
+                ocr_date_of_birth=parsed_date_of_birth,
+                ocr_nid_number=ocr_nid_number,
+                ocr_address=ocr_address,
+                ocr_blood_group=ocr_blood_group,
+                ocr_image_quality=current_user.ocr_image_quality,
+                ocr_warnings=current_user.ocr_warnings or [],
+                processed_at=current_user.ocr_processed_at or datetime.now(timezone.utc),
+            )
+            comparison_payload = _build_comparison_payload(current_user)
+            current_user.ocr_name_match_score = comparison_payload["ocr_name_match_score"]
+            current_user.ocr_name_match_status = comparison_payload["ocr_name_match_status"]
+            current_user.ocr_nid_match = comparison_payload["ocr_nid_match"]
+            current_user.ocr_dob_match = comparison_payload["ocr_dob_match"]
+            current_user.ocr_review_status = comparison_payload["ocr_review_status"]
+            current_user.admin_review_notes = comparison_payload["admin_review_notes"]
+            current_user.ocr_confirmed = True
         db.query(VerificationRejection).filter(
             VerificationRejection.user_id == current_user.id
         ).delete()
@@ -709,6 +796,43 @@ async def get_user_verification_image(
         media_type=user.nid_image_content_type or "image/jpeg"
     )
 
+@router.get("/image-back")
+async def get_verification_back_image(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get the NID back-side image for the current user
+    """
+    if not current_user.nid_back_image_data:
+        raise HTTPException(status_code=404, detail="No NID back-side image found")
+
+    return Response(
+        content=current_user.nid_back_image_data,
+        media_type=current_user.nid_back_image_content_type or "image/jpeg"
+    )
+
+@router.get("/image-back/{user_id}")
+async def get_user_verification_back_image(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+):
+    """
+    Admin endpoint to get NID back-side image for any user
+    """
+    user = db.query(User).filter(User.id == user_id, User.is_deleted == False).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.nid_back_image_data:
+        raise HTTPException(status_code=404, detail="No NID back-side image found for this user")
+
+    return Response(
+        content=user.nid_back_image_data,
+        media_type=user.nid_back_image_content_type or "image/jpeg"
+    )
+
 @router.get("/image-base64")
 async def get_verification_image_base64(
     current_user: User = Depends(get_current_user),
@@ -747,11 +871,18 @@ async def approve_verification(
         _update_verified_identity_from_ocr(user)
         user.ocr_confirmed = True
         profile = ProfileRepository.get_by_user_id(db, user_id)
+        if not profile:
+            from models.profile.profile import Profile
+            profile = Profile(user_id=user_id)
+            db.add(profile)
+            db.flush()
         if profile:
             profile.identity_verified = True
             profile.date_of_birth = user.date_of_birth
             profile.father_name = user.father_name
             profile.mother_name = user.mother_name
+            profile.address = _optional_string(getattr(user, "ocr_address", None)) or profile.address
+            profile.blood_group = _optional_string(getattr(user, "ocr_blood_group", None)) or profile.blood_group
         if admin_review_notes is not None:
             user.admin_review_notes = admin_review_notes.strip() or None
 

@@ -5,6 +5,7 @@ import Services from './Services';
 import WhyChooseUs from './WhyChooseUs';
 import Testimonials from './Testimonials';
 import Contact from './Contact';
+import SignupSuccessNotification from './SignupSuccessNotification';
 
 const AnimatedHome: React.FC = () => {
   const location = useLocation();
@@ -32,6 +33,7 @@ const AnimatedHome: React.FC = () => {
 
   return (
     <main className="overflow-hidden bg-[#fffaf6] text-[#342a28]">
+      <SignupSuccessNotification />
       <section id="home" className="relative flex min-h-[720px] scroll-mt-20 items-center overflow-hidden bg-gradient-to-br from-[#fffaf6] to-[#faeee9] py-16">
         <div className="home-drift absolute -right-20 top-12 h-64 w-64 rounded-full bg-[#efc8cf]/60" />
         <div className="home-drift-delayed absolute bottom-8 left-[45%] h-28 w-28 rounded-full bg-[#ebd2bd]/70" />

@@ -425,6 +425,146 @@ def _reasons(a_to_b: dict[str, Any], b_to_a: dict[str, Any], similarity: float) 
     return reasons[:4] or ["closest available profile match"]
 
 
+def _display_value(value: Any, unit: str | None = None) -> str:
+    if value is None or pd.isna(value):
+        return "Not specified"
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    text = str(value).replace("_", " ").strip()
+    if not text or text.lower() in {"nan", "none", "unknown"}:
+        return "Not specified"
+    return f"{text} {unit}" if unit else text
+
+
+def _range_preference(row: pd.Series, field: str, unit: str | None = None) -> str:
+    low = row.get(f"preferred_{field}_min")
+    high = row.get(f"preferred_{field}_max")
+    if pd.isna(low) or pd.isna(high):
+        return "No preference"
+    return f"{_display_value(low, unit)} - {_display_value(high, unit)}"
+
+
+def _preference_value(row: pd.Series, key: str) -> str:
+    if key == "age":
+        return _range_preference(row, "age", "years")
+    if key == "height":
+        return _range_preference(row, "height", "cm")
+    if key == "weight":
+        return _range_preference(row, "weight", "kg")
+    if key == "religion":
+        return _display_value(row.get("preferred_religion"))
+    if key == "education":
+        return _display_value(row.get("preferred_education"))
+    if key == "profession":
+        value = _text(row.get("preferred_profession"))
+        return "Any respectful profession" if value == "any respectful profession" else _display_value(value)
+    if key == "location":
+        preference = _text(row.get("preferred_location"))
+        if preference == "specific":
+            return f"Specific: {_display_value(row.get('specific_location'))}"
+        if preference == "samecity":
+            return "Same city"
+        if preference == "samecountry":
+            return "Same country"
+        return _display_value(preference)
+    if key == "lifestyle":
+        parts: list[str] = []
+        smoking = _text(row.get("lifestyle_pref_smoking"))
+        alcohol = _text(row.get("lifestyle_pref_alcohol"))
+        if smoking not in NO_PREFERENCE:
+            parts.append(f"smoking: {smoking}")
+        if alcohol not in NO_PREFERENCE:
+            parts.append(f"alcohol: {alcohol}")
+        if _bool(row.get("lifestyle_pref_dietary_match")):
+            parts.append(f"diet: {_display_value(row.get('dietary_preference'))}")
+        return ", ".join(parts) if parts else "No lifestyle preference"
+    return "No preference"
+
+
+def _candidate_value(row: pd.Series, key: str) -> str:
+    if key == "age":
+        return _display_value(row.get("age"), "years")
+    if key == "height":
+        return _display_value(row.get("height"), "cm")
+    if key == "weight":
+        return _display_value(row.get("weight"), "kg")
+    if key == "education":
+        return _display_value(row.get("academic_background"))
+    if key == "lifestyle":
+        return ", ".join([
+            f"diet: {_display_value(row.get('dietary_preference'))}",
+            f"smoking: {_display_value(row.get('smoking_habit'))}",
+            f"alcohol: {_display_value(row.get('alcohol_consumption'))}",
+        ])
+    return _display_value(row.get(key))
+
+
+def _match_note(key: str, requester_match: bool | None, reciprocal_match: bool | None) -> str:
+    if requester_match is None and reciprocal_match is None:
+        return "This preference was not specified by either side."
+    if requester_match is True and reciprocal_match is True:
+        return "Mutual preference satisfied."
+    if requester_match is True and reciprocal_match is None:
+        return "Matches your preference; their matching preference was not specified."
+    if requester_match is None and reciprocal_match is True:
+        return "Their preference matches your profile; you did not specify this preference."
+    if requester_match is False and reciprocal_match is False:
+        return "This was relaxed because closer ranked matches were limited."
+    if requester_match is False:
+        return "Does not fully match your preference."
+    if reciprocal_match is False:
+        return "Does not fully match their preference."
+    return "Partially considered by the recommendation model."
+
+
+def _build_match_explanation(
+    query: pd.Series,
+    candidate: pd.Series,
+    a_to_b: dict[str, Any],
+    b_to_a: dict[str, Any],
+    similarity: float,
+    preference: float,
+) -> dict[str, Any]:
+    labels = {
+        "age": "Age",
+        "height": "Height",
+        "weight": "Weight",
+        "religion": "Religion",
+        "education": "Education",
+        "profession": "Profession",
+        "location": "Location",
+        "lifestyle": "Lifestyle",
+    }
+    required = set(a_to_b["required"]) | set(b_to_a["required"])
+    rows = []
+    for key, label in labels.items():
+        requester_match = a_to_b["dimensions"].get(key)
+        reciprocal_match = b_to_a["dimensions"].get(key)
+        matched = None if requester_match is None and reciprocal_match is None else (
+            requester_match is not False and reciprocal_match is not False
+        )
+        rows.append({
+            "key": key,
+            "label": label,
+            "matched": matched,
+            "required": key in required,
+            "user_preference": _preference_value(query, key),
+            "candidate_value": _candidate_value(candidate, key),
+            "candidate_preference": _preference_value(candidate, key),
+            "note": _match_note(key, requester_match, reciprocal_match),
+        })
+    relaxed = sorted(set(a_to_b["required_failures"] + b_to_a["required_failures"]))
+    return {
+        "overall_score": round(0.40 * similarity + 0.60 * preference, 4),
+        "similarity_score": round(similarity, 4),
+        "preference_score": round(preference, 4),
+        "strict_compatible": not relaxed,
+        "reason_tags": _reasons(a_to_b, b_to_a, similarity),
+        "relaxed_preferences": relaxed,
+        "rows": rows,
+    }
+
+
 def recommend(
     user_id: str,
     top_k: int = 5,
@@ -454,6 +594,7 @@ def recommend(
         b_to_a = _directional_preferences(candidate, query)
         preference = (a_to_b["score"] + b_to_a["score"]) / 2.0
         relaxed = sorted(set(a_to_b["required_failures"] + b_to_a["required_failures"]))
+        explanation = _build_match_explanation(query, candidate, a_to_b, b_to_a, similarity, preference)
         scored.append({
             "user_id": candidate["user_id"],
             "name": candidate["name"],
@@ -468,6 +609,7 @@ def recommend(
             "strict_compatible": not relaxed,
             "reason_tags": _reasons(a_to_b, b_to_a, similarity),
             "relaxed_preferences": relaxed,
+            "match_explanation": explanation,
             "priority_key": _priority_key(
                 a_to_b, b_to_a,
                 0.40 * similarity + 0.60 * preference,

@@ -16,6 +16,19 @@ import base64
 router = APIRouter()
 
 
+NON_MATCHABLE_ACCOUNT_MESSAGE = "This account is not available for matchmaking."
+
+
+def is_public_matchable_user(user: Optional[User]) -> bool:
+    """Return True when a user can participate in matchmaking interactions."""
+    return bool(
+        user
+        and not user.is_admin
+        and not user.is_deleted
+        and not user.is_archived
+    )
+
+
 class SendInterestRequest(BaseModel):
     to_user_id: str
     message: Optional[str] = None
@@ -37,6 +50,9 @@ async def send_interest(
         recipient = UserRepository.get_by_id(db, params.to_user_id)
         if not recipient:
             raise HTTPException(status_code=404, detail="User not found")
+
+        if not is_public_matchable_user(current_user) or not is_public_matchable_user(recipient):
+            raise HTTPException(status_code=403, detail=NON_MATCHABLE_ACCOUNT_MESSAGE)
 
         if BlockRepository.is_blocked_between(db, current_user.id, params.to_user_id):
             raise HTTPException(status_code=403, detail="You cannot send interest to this user")
@@ -122,6 +138,8 @@ async def get_received_interests(
             if interest.from_user_id in blocked_ids:
                 continue
             sender = UserRepository.get_by_id(db, interest.from_user_id)
+            if not is_public_matchable_user(sender):
+                continue
             sender_profile = ProfileRepository.get_by_user_id(db, interest.from_user_id)
             
             # Convert profile picture to base64 if exists
@@ -167,6 +185,8 @@ async def get_sent_interests(
             if interest.to_user_id in blocked_ids:
                 continue
             recipient = UserRepository.get_by_id(db, interest.to_user_id)
+            if not is_public_matchable_user(recipient):
+                continue
             recipient_profile = ProfileRepository.get_by_user_id(db, interest.to_user_id)
             
             # Convert profile picture to base64 if exists
@@ -212,6 +232,10 @@ async def accept_interest(
         # Verify the current user is the recipient
         if interest.to_user_id != current_user.id:
             raise HTTPException(status_code=403, detail="You can only accept interests sent to you")
+
+        sender = UserRepository.get_by_id(db, interest.from_user_id)
+        if not is_public_matchable_user(current_user) or not is_public_matchable_user(sender):
+            raise HTTPException(status_code=403, detail=NON_MATCHABLE_ACCOUNT_MESSAGE)
         
         # Check if already processed
         if interest.status != "pending":
@@ -240,7 +264,6 @@ async def accept_interest(
         updated_interest = InterestRepository.update_status(db, interest, "accepted")
         
         # Create notification for the sender
-        sender = UserRepository.get_by_id(db, interest.from_user_id)
         NotificationRepository.create(
             db,
             user_id=interest.from_user_id,
@@ -281,6 +304,10 @@ async def reject_interest(
         # Verify the current user is the recipient
         if interest.to_user_id != current_user.id:
             raise HTTPException(status_code=403, detail="You can only reject interests sent to you")
+
+        sender = UserRepository.get_by_id(db, interest.from_user_id)
+        if not is_public_matchable_user(current_user) or not is_public_matchable_user(sender):
+            raise HTTPException(status_code=403, detail=NON_MATCHABLE_ACCOUNT_MESSAGE)
         
         # Check if already processed
         if interest.status != "pending":
@@ -333,6 +360,10 @@ async def cancel_interest(
         # Verify the current user is the sender
         if interest.from_user_id != current_user.id:
             raise HTTPException(status_code=403, detail="You can only cancel interests you sent")
+
+        recipient = UserRepository.get_by_id(db, interest.to_user_id)
+        if not is_public_matchable_user(current_user) or not is_public_matchable_user(recipient):
+            raise HTTPException(status_code=403, detail=NON_MATCHABLE_ACCOUNT_MESSAGE)
         
         # Only allow canceling pending interests
         if interest.status != "pending":
@@ -393,6 +424,8 @@ async def get_matches(
                 continue
             
             other_user = UserRepository.get_by_id(db, other_user_id)
+            if not is_public_matchable_user(other_user):
+                continue
             other_profile = ProfileRepository.get_by_user_id(db, other_user_id)
             print(
                 f"[MATCHES] interest_id={interest.id} other_user_id={other_user_id} "

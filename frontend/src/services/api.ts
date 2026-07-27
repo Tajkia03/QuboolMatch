@@ -262,6 +262,24 @@ export const authApi = {
       body: JSON.stringify(userData)
     });
     return handleResponse(response);
+  },
+
+  verifyEmail: async (userId: string, email: string, pin: string) => {
+    const response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, email, pin })
+    });
+    return handleResponse(response);
+  },
+
+  resendEmailVerification: async (userId: string, email: string) => {
+    const response = await fetch(`${API_BASE_URL}/auth/resend-email-verification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, email })
+    });
+    return handleResponse(response);
   }
 };
 
